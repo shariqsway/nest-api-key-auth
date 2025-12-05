@@ -7,6 +7,9 @@ export interface ApiKey {
   expiresAt: Date | null;
   revokedAt: Date | null;
   lastUsedAt: Date | null;
+  ipWhitelist?: string[];
+  rateLimitMax?: number;
+  rateLimitWindowMs?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,6 +18,9 @@ export interface CreateApiKeyDto {
   name: string;
   scopes?: string[];
   expiresAt?: Date;
+  ipWhitelist?: string[];
+  rateLimitMax?: number;
+  rateLimitWindowMs?: number;
 }
 
 export interface CreateApiKeyResponse {
@@ -27,11 +33,29 @@ export interface CreateApiKeyResponse {
 }
 
 import { PrismaClient } from '@prisma/client';
+import { IApiKeyAdapter } from '../adapters/base.adapter';
+import { TypeOrmApiKeyRepository, MongooseApiKeyModel } from '../adapters/types';
+
+export type AdapterType = 'prisma' | 'typeorm' | 'mongoose' | 'custom';
+
+import { AuditLogOptions } from '../services/audit-log.service';
+import { HashAlgorithm } from '../utils/hash.util';
 
 export interface ApiKeyModuleOptions {
   secretLength?: number;
   headerName?: string;
   queryParamName?: string;
   cookieName?: string;
+  adapter?: AdapterType;
   prismaClient?: PrismaClient;
+  customAdapter?: IApiKeyAdapter;
+  typeOrmRepository?: TypeOrmApiKeyRepository;
+  mongooseModel?: MongooseApiKeyModel;
+  enableRateLimiting?: boolean;
+  enableAuditLogging?: boolean;
+  enableCaching?: boolean;
+  cacheTtlMs?: number;
+  auditLogOptions?: AuditLogOptions;
+  hashAlgorithm?: HashAlgorithm;
+  bcryptRounds?: number;
 }

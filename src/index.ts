@@ -1,8 +1,14 @@
 export * from './api-key.module';
 export * from './services/api-key.service';
+export * from './services/health.service';
+export * from './services/rate-limit.service';
+export * from './services/audit-log.service';
+export * from './services/cache.service';
 export * from './guards/api-key.guard';
 export * from './guards/scopes.guard';
 export * from './decorators';
 export * from './interfaces';
 export * from './exceptions';
+export * from './adapters';
+export * from './utils';
 import './types/express';

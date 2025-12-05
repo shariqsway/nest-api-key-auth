@@ -1,0 +1,37 @@
+// MySQL Example
+// This is an example Prisma schema for MySQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  // URL is provided via DATABASE_URL environment variable (Prisma 7 requirement)
+  // Example: DATABASE_URL="mysql://user:password@localhost:3306/mydb"
+}
+
+model ApiKey {
+  id               String   @id @default(cuid())
+  name             String   @db.VarChar(255)
+  keyPrefix        String   @db.VarChar(8)
+  hashedKey        String   @db.VarChar(255)
+  scopes           String   @db.Text // MySQL stores arrays as JSON string
+  expiresAt        DateTime?
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  ipWhitelist      String   @db.Text // MySQL stores arrays as JSON string
+  rateLimitMax     Int?
+  rateLimitWindowMs Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([keyPrefix, hashedKey])
+  @@index([keyPrefix])
+  @@index([expiresAt])
+  @@map("api_keys")
+}
+
+// Note: For MySQL, you may need to handle arrays differently
+// Consider using JSON columns or a separate table for arrays
+

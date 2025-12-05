@@ -1,12 +1,14 @@
-// This is your Prisma schema file for API Key authentication
+// SQLite Configuration Example
+// File: prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" // Change to your database provider (postgresql, mysql, sqlite, etc.)
+  provider = "sqlite"
   // URL is provided via DATABASE_URL environment variable (Prisma 7 requirement)
+  // Example: DATABASE_URL="file:./dev.db"
 }
 
 model ApiKey {

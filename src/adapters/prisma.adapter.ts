@@ -1,11 +1,20 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ApiKey as PrismaApiKey, PrismaClient } from '@prisma/client';
 import { ApiKey } from '../interfaces';
+import { IApiKeyAdapter } from './base.adapter';
+import { ApiKeyLogger } from '../utils/logger.util';
 
 export const PRISMA_CLIENT_KEY = 'PRISMA_CLIENT';
 
 @Injectable()
-export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
+export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDestroy {
   private prisma: PrismaClient;
   private shouldDisconnect: boolean;
 
@@ -21,7 +30,16 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     if (this.shouldDisconnect) {
-      await this.prisma.$connect();
+      try {
+        await this.prisma.$connect();
+        ApiKeyLogger.log('Prisma client connected successfully');
+      } catch (error) {
+        ApiKeyLogger.error(
+          'Failed to connect Prisma client',
+          error instanceof Error ? error : String(error),
+        );
+        throw new InternalServerErrorException('Failed to initialize database connection');
+      }
     }
   }
 
@@ -43,18 +61,32 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
     hashedKey: string;
     scopes: string[];
     expiresAt?: Date | null;
+    ipWhitelist?: string[];
+    rateLimitMax?: number | null;
+    rateLimitWindowMs?: number | null;
   }): Promise<ApiKey> {
-    const apiKey = await this.prisma.apiKey.create({
-      data: {
-        name: data.name,
-        keyPrefix: data.keyPrefix,
-        hashedKey: data.hashedKey,
-        scopes: data.scopes,
-        expiresAt: data.expiresAt || null,
-      },
-    });
+    try {
+      const apiKey = await this.prisma.apiKey.create({
+        data: {
+          name: data.name,
+          keyPrefix: data.keyPrefix,
+          hashedKey: data.hashedKey,
+          scopes: data.scopes,
+          expiresAt: data.expiresAt || null,
+          ipWhitelist: data.ipWhitelist || [],
+          rateLimitMax: data.rateLimitMax || null,
+          rateLimitWindowMs: data.rateLimitWindowMs || null,
+        },
+      });
 
-    return this.mapToApiKey(apiKey);
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        'Error creating API key in database',
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to create API key in database');
+    }
   }
 
   /**
@@ -64,16 +96,24 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
    * @returns Array of active API keys with matching prefix
    */
   async findByKeyPrefix(keyPrefix: string): Promise<ApiKey[]> {
-    const now = new Date();
-    const apiKeys = await this.prisma.apiKey.findMany({
-      where: {
-        keyPrefix,
-        revokedAt: null,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      },
-    });
+    try {
+      const now = new Date();
+      const apiKeys = await this.prisma.apiKey.findMany({
+        where: {
+          keyPrefix,
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+      });
 
-    return apiKeys.map((key: PrismaApiKey) => this.mapToApiKey(key));
+      return apiKeys.map((key: PrismaApiKey) => this.mapToApiKey(key));
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error finding keys by prefix: ${keyPrefix}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to query API keys');
+    }
   }
 
   /**
@@ -83,15 +123,23 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
    * @returns The API key if found, null otherwise
    */
   async findById(id: string): Promise<ApiKey | null> {
-    const apiKey = await this.prisma.apiKey.findUnique({
-      where: { id },
-    });
+    try {
+      const apiKey = await this.prisma.apiKey.findUnique({
+        where: { id },
+      });
 
-    if (!apiKey) {
-      return null;
+      if (!apiKey) {
+        return null;
+      }
+
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error finding key by ID: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to find API key');
     }
-
-    return this.mapToApiKey(apiKey);
   }
 
   /**
@@ -101,12 +149,20 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
    * @returns The revoked API key
    */
   async revoke(id: string): Promise<ApiKey> {
-    const apiKey = await this.prisma.apiKey.update({
-      where: { id },
-      data: { revokedAt: new Date() },
-    });
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: { revokedAt: new Date() },
+      });
 
-    return this.mapToApiKey(apiKey);
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error revoking key: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to revoke API key');
+    }
   }
 
   /**
@@ -115,11 +171,16 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
    * @returns Array of all API keys
    */
   async findAll(): Promise<ApiKey[]> {
-    const apiKeys = await this.prisma.apiKey.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    try {
+      const apiKeys = await this.prisma.apiKey.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
 
-    return apiKeys.map((key: PrismaApiKey) => this.mapToApiKey(key));
+      return apiKeys.map((key: PrismaApiKey) => this.mapToApiKey(key));
+    } catch (error) {
+      ApiKeyLogger.error('Error finding all keys', error instanceof Error ? error : String(error));
+      throw new InternalServerErrorException('Failed to retrieve API keys');
+    }
   }
 
   /**
@@ -128,16 +189,24 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
    * @returns Array of active API keys
    */
   async findAllActive(): Promise<ApiKey[]> {
-    const now = new Date();
-    const apiKeys = await this.prisma.apiKey.findMany({
-      where: {
-        revokedAt: null,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    try {
+      const now = new Date();
+      const apiKeys = await this.prisma.apiKey.findMany({
+        where: {
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
-    return apiKeys.map((key: PrismaApiKey) => this.mapToApiKey(key));
+      return apiKeys.map((key: PrismaApiKey) => this.mapToApiKey(key));
+    } catch (error) {
+      ApiKeyLogger.error(
+        'Error finding active keys',
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to retrieve active API keys');
+    }
   }
 
   /**
@@ -147,12 +216,20 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
    * @returns The updated API key
    */
   async updateLastUsed(id: string): Promise<ApiKey> {
-    const apiKey = await this.prisma.apiKey.update({
-      where: { id },
-      data: { lastUsedAt: new Date() },
-    });
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: { lastUsedAt: new Date() },
+      });
 
-    return this.mapToApiKey(apiKey);
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error updating last used: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to update last used timestamp');
+    }
   }
 
   /**
@@ -165,11 +242,15 @@ export class PrismaAdapter implements OnModuleInit, OnModuleDestroy {
     return {
       id: prismaKey.id,
       name: prismaKey.name,
+      keyPrefix: prismaKey.keyPrefix,
       hashedKey: prismaKey.hashedKey,
       scopes: prismaKey.scopes || [],
       expiresAt: prismaKey.expiresAt,
       revokedAt: prismaKey.revokedAt,
       lastUsedAt: prismaKey.lastUsedAt,
+      ipWhitelist: prismaKey.ipWhitelist || [],
+      rateLimitMax: prismaKey.rateLimitMax || undefined,
+      rateLimitWindowMs: prismaKey.rateLimitWindowMs || undefined,
       createdAt: prismaKey.createdAt,
       updatedAt: prismaKey.updatedAt,
     };

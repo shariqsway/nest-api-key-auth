@@ -1,12 +1,14 @@
-// This is your Prisma schema file for API Key authentication
+// SQLite Example
+// This is an example Prisma schema for SQLite
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" // Change to your database provider (postgresql, mysql, sqlite, etc.)
+  provider = "sqlite"
   // URL is provided via DATABASE_URL environment variable (Prisma 7 requirement)
+  // Example: DATABASE_URL="file:./dev.db"
 }
 
 model ApiKey {
@@ -14,11 +16,11 @@ model ApiKey {
   name             String
   keyPrefix        String
   hashedKey        String
-  scopes           String[] @default([])
+  scopes           String   // SQLite stores arrays as JSON string
   expiresAt        DateTime?
   revokedAt        DateTime?
   lastUsedAt       DateTime?
-  ipWhitelist      String[] @default([])
+  ipWhitelist      String   // SQLite stores arrays as JSON string
   rateLimitMax     Int?
   rateLimitWindowMs Int?
   createdAt        DateTime @default(now())
@@ -29,4 +31,7 @@ model ApiKey {
   @@index([expiresAt])
   @@map("api_keys")
 }
+
+// Note: For SQLite, arrays are stored as JSON strings
+// The adapter will handle serialization/deserialization
 

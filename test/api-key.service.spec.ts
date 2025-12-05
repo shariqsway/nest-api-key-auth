@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ApiKeyService } from '../src/services/api-key.service';
-import { PrismaAdapter } from '../src/adapters/prisma.adapter';
+import { IApiKeyAdapter } from '../src/adapters/base.adapter';
 import { BadRequestException } from '@nestjs/common';
 import { ApiKeyNotFoundException, ApiKeyAlreadyRevokedException } from '../src/exceptions';
 
 describe('ApiKeyService', () => {
   let service: ApiKeyService;
 
-  const mockAdapter = {
+  const mockAdapter: jest.Mocked<IApiKeyAdapter> = {
     create: jest.fn(),
     findByKeyPrefix: jest.fn(),
     findById: jest.fn(),
@@ -17,19 +17,8 @@ describe('ApiKeyService', () => {
     updateLastUsed: jest.fn(),
   };
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ApiKeyService,
-        {
-          provide: PrismaAdapter,
-          useValue: mockAdapter,
-        },
-      ],
-    }).compile();
-
-    service = module.get<ApiKeyService>(ApiKeyService);
-
+  beforeEach(() => {
+    service = new ApiKeyService(mockAdapter, 32);
     jest.clearAllMocks();
   });
 
