@@ -54,7 +54,12 @@ jobs:
           git push
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: |
+          if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+            npm publish --provenance --access public --tag beta
+          else
+            npm publish --provenance --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
