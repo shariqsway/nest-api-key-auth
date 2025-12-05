@@ -1,5 +1,12 @@
 # nest-api-key-auth
 
+[![npm version](https://img.shields.io/npm/v/nest-api-key-auth.svg)](https://www.npmjs.com/package/nest-api-key-auth)
+[![npm downloads](https://img.shields.io/npm/dm/nest-api-key-auth.svg)](https://www.npmjs.com/package/nest-api-key-auth)
+[![Node.js CI](https://github.com/shariqsway/nest-api-key-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/shariqsway/nest-api-key-auth/actions/workflows/ci.yml)
+[![GitHub issues](https://img.shields.io/github/issues/shariqsway/nest-api-key-auth.svg)](https://github.com/shariqsway/nest-api-key-auth/issues)
+[![GitHub license](https://img.shields.io/github/license/shariqsway/nest-api-key-auth.svg)](https://github.com/shariqsway/nest-api-key-auth/blob/main/LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+
 A NestJS module that makes API key–based authentication extremely easy, secure, and configurable.
 
 > **⚠️ Development Status:** This library is currently under active development and is not yet ready for production use. The API may change in future versions.
