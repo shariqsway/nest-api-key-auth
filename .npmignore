@@ -1,0 +1,40 @@
+# Source files
+src/
+test/
+*.spec.ts
+*.test.ts
+
+# Development files
+.git/
+.gitignore
+.eslintrc.js
+.prettierrc
+jest.config.js
+jest.setup.ts
+tsconfig.json
+
+# Documentation (keep README.md)
+MIGRATION_GUIDE.md
+examples/
+
+# Prisma
+prisma/
+*.prisma
+
+# Build artifacts (will be included via dist/)
+node_modules/
+coverage/
+*.log
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+

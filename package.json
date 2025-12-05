@@ -18,7 +18,7 @@
     "prisma:studio": "prisma studio"
   },
   "bin": {
-    "nest-api-key": "./dist/cli/index.js"
+    "nest-api-key": "dist/cli/index.js"
   },
   "keywords": [
     "nestjs",
@@ -26,8 +26,23 @@
     "authentication",
     "auth",
     "security",
-    "prisma"
+    "prisma",
+    "typeorm",
+    "mongoose",
+    "bcrypt",
+    "argon2",
+    "rate-limiting",
+    "ip-whitelisting",
+    "audit-logging"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shariqsway/nest-api-key-auth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shariqsway/nest-api-key-auth/issues"
+  },
+  "homepage": "https://github.com/shariqsway/nest-api-key-auth#readme",
   "author": "Mohammad Shariq",
   "license": "MIT",
   "peerDependencies": {
