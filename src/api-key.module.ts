@@ -14,12 +14,21 @@ import { validateModuleOptions } from './utils/validation.util';
 import { ApiKeyLogger } from './utils/logger.util';
 import { HealthService } from './services/health.service';
 import { RateLimitService } from './services/rate-limit.service';
+import { RedisRateLimitService, REDIS_CLIENT_KEY } from './services/redis-rate-limit.service';
 import { AuditLogService } from './services/audit-log.service';
 import { CacheService } from './services/cache.service';
+import { RedisCacheService } from './services/redis-cache.service';
+import { AnalyticsService } from './services/analytics.service';
+import { WebhookService } from './services/webhook.service';
+import { BulkOperationsService } from './services/bulk-operations.service';
+import { ExpirationNotificationService } from './services/expiration-notification.service';
+import { RedisClient } from './types/redis.types';
 
-const CACHE_SERVICE_TOKEN = 'CACHE_SERVICE';
-const RATE_LIMIT_SERVICE_TOKEN = 'RATE_LIMIT_SERVICE';
-const AUDIT_LOG_SERVICE_TOKEN = 'AUDIT_LOG_SERVICE';
+export const CACHE_SERVICE_TOKEN = 'CACHE_SERVICE';
+export const RATE_LIMIT_SERVICE_TOKEN = 'RATE_LIMIT_SERVICE';
+export const AUDIT_LOG_SERVICE_TOKEN = 'AUDIT_LOG_SERVICE';
+export const ANALYTICS_SERVICE_TOKEN = 'ANALYTICS_SERVICE';
+export const WEBHOOK_SERVICE_TOKEN = 'WEBHOOK_SERVICE';
 
 export const API_KEY_ADAPTER = 'API_KEY_ADAPTER';
 
@@ -111,19 +120,43 @@ export class ApiKeyModule {
       throw new Error(`Unknown adapter type: ${adapterType}`);
     }
 
-    // Add optional services
-    if (defaultOptions.enableCaching !== false) {
+    // Setup Redis client if provided
+    if (defaultOptions.redisClient) {
       providers.push({
-        provide: CACHE_SERVICE_TOKEN,
-        useClass: CacheService,
+        provide: REDIS_CLIENT_KEY,
+        useValue: defaultOptions.redisClient,
       });
     }
 
+    // Add optional services
+    if (defaultOptions.enableCaching !== false) {
+      if (defaultOptions.redisClient) {
+        providers.push({
+          provide: CACHE_SERVICE_TOKEN,
+          useFactory: (redisClient: RedisClient) => new RedisCacheService(redisClient),
+          inject: [REDIS_CLIENT_KEY],
+        });
+      } else {
+        providers.push({
+          provide: CACHE_SERVICE_TOKEN,
+          useClass: CacheService,
+        });
+      }
+    }
+
     if (defaultOptions.enableRateLimiting !== false) {
-      providers.push({
-        provide: RATE_LIMIT_SERVICE_TOKEN,
-        useClass: RateLimitService,
-      });
+      if (defaultOptions.redisClient) {
+        providers.push({
+          provide: RATE_LIMIT_SERVICE_TOKEN,
+          useFactory: (redisClient: RedisClient) => new RedisRateLimitService(redisClient),
+          inject: [REDIS_CLIENT_KEY],
+        });
+      } else {
+        providers.push({
+          provide: RATE_LIMIT_SERVICE_TOKEN,
+          useClass: RateLimitService,
+        });
+      }
     }
 
     if (defaultOptions.enableAuditLogging !== false) {
@@ -133,21 +166,49 @@ export class ApiKeyModule {
       });
     }
 
+    if (defaultOptions.enableAnalytics !== false) {
+      providers.push({
+        provide: ANALYTICS_SERVICE_TOKEN,
+        useFactory: (adapter: IApiKeyAdapter) => new AnalyticsService(adapter),
+        inject: [API_KEY_ADAPTER],
+      });
+    }
+
+    if (defaultOptions.enableWebhooks !== false) {
+      const webhookService = new WebhookService();
+      if (defaultOptions.webhooks) {
+        defaultOptions.webhooks.forEach((config) => webhookService.registerWebhook(config));
+      }
+      providers.push({
+        provide: WEBHOOK_SERVICE_TOKEN,
+        useValue: webhookService,
+      });
+    }
+
     // Add service and guards
     providers.push(
       {
         provide: ApiKeyService,
-        useFactory: (adapter: IApiKeyAdapter, cacheService?: CacheService) => {
+        useFactory: (
+          adapter: IApiKeyAdapter,
+          cacheService?: CacheService | RedisCacheService,
+          webhookService?: WebhookService,
+          analyticsService?: AnalyticsService,
+        ) => {
           return new ApiKeyService(
             adapter,
             defaultOptions.secretLength,
             cacheService,
             defaultOptions.hashAlgorithm || 'bcrypt',
+            webhookService,
+            analyticsService,
           );
         },
         inject: [
           API_KEY_ADAPTER,
           ...(defaultOptions.enableCaching !== false ? [CACHE_SERVICE_TOKEN] : []),
+          ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
+          ...(defaultOptions.enableAnalytics !== false ? [ANALYTICS_SERVICE_TOKEN] : []),
         ],
       },
       {
@@ -192,6 +253,23 @@ export class ApiKeyModule {
         provide: 'API_KEY_OPTIONS',
         useValue: defaultOptions,
       },
+      {
+        provide: BulkOperationsService,
+        useFactory: (adapter: IApiKeyAdapter, apiKeyService: ApiKeyService) => {
+          return new BulkOperationsService(adapter, apiKeyService);
+        },
+        inject: [API_KEY_ADAPTER, ApiKeyService],
+      },
+      {
+        provide: ExpirationNotificationService,
+        useFactory: (adapter: IApiKeyAdapter, webhookService?: WebhookService) => {
+          return new ExpirationNotificationService(adapter, webhookService);
+        },
+        inject: [
+          API_KEY_ADAPTER,
+          ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
+        ],
+      },
     );
 
     const moduleExports: Array<
@@ -199,11 +277,42 @@ export class ApiKeyModule {
       | typeof ApiKeyGuard
       | typeof ScopesGuard
       | typeof HealthService
+      | typeof BulkOperationsService
+      | typeof ExpirationNotificationService
       | string
       | typeof CacheService
       | typeof RateLimitService
       | typeof AuditLogService
+      | typeof AnalyticsService
+      | typeof WebhookService
     > = [ApiKeyService, ApiKeyGuard, ScopesGuard, HealthService, API_KEY_ADAPTER];
+
+    // Add optional services to exports
+    if (defaultOptions.enableCaching !== false) {
+      moduleExports.push(CACHE_SERVICE_TOKEN);
+    }
+
+    if (defaultOptions.enableRateLimiting !== false) {
+      moduleExports.push(RATE_LIMIT_SERVICE_TOKEN);
+    }
+
+    if (defaultOptions.enableAuditLogging !== false) {
+      moduleExports.push(AUDIT_LOG_SERVICE_TOKEN);
+    }
+
+    if (defaultOptions.enableAnalytics !== false) {
+      moduleExports.push(ANALYTICS_SERVICE_TOKEN);
+    }
+
+    if (defaultOptions.enableWebhooks !== false) {
+      moduleExports.push(WEBHOOK_SERVICE_TOKEN);
+    }
+
+    // Always export bulk operations and expiration services
+    moduleExports.push(
+      BulkOperationsService as typeof BulkOperationsService,
+      ExpirationNotificationService as typeof ExpirationNotificationService,
+    );
 
     if (defaultOptions.enableCaching !== false) {
       moduleExports.push(CACHE_SERVICE_TOKEN);
@@ -215,6 +324,14 @@ export class ApiKeyModule {
 
     if (defaultOptions.enableAuditLogging !== false) {
       moduleExports.push(AUDIT_LOG_SERVICE_TOKEN);
+    }
+
+    if (defaultOptions.enableAnalytics !== false) {
+      moduleExports.push(ANALYTICS_SERVICE_TOKEN);
+    }
+
+    if (defaultOptions.enableWebhooks !== false) {
+      moduleExports.push(WEBHOOK_SERVICE_TOKEN);
     }
 
     return {

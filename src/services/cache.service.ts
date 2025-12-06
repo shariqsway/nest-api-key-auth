@@ -48,7 +48,7 @@ export class CacheService {
    * @param prefix - The key prefix
    * @returns Array of cached API keys with matching prefix
    */
-  getByPrefix(prefix: string): ApiKey[] {
+  getByPrefix(prefix: string): ApiKey[] | Promise<ApiKey[]> {
     const now = Date.now();
     const keys: ApiKey[] = [];
 
@@ -72,7 +72,7 @@ export class CacheService {
    * @param key - The API key to cache
    * @param ttlMs - Optional TTL in milliseconds
    */
-  set(key: ApiKey, ttlMs?: number): void {
+  set(key: ApiKey, ttlMs?: number): void | Promise<void> {
     const ttl = ttlMs || this.defaultTtl;
     this.cache.set(key.id, {
       key,
@@ -95,7 +95,7 @@ export class CacheService {
    *
    * @param keyId - The API key ID to invalidate
    */
-  invalidate(keyId: string): void {
+  invalidate(keyId: string): void | Promise<void> {
     this.cache.delete(keyId);
     ApiKeyLogger.debug(`Cache invalidated for key: ${keyId}`);
   }

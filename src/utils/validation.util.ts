@@ -152,4 +152,26 @@ export function validateModuleOptions(options: ApiKeyModuleOptions): void {
   ) {
     throw new BadRequestException('bcryptRounds must be a number between 4 and 31');
   }
+
+  if (options.enableAnalytics !== undefined && typeof options.enableAnalytics !== 'boolean') {
+    throw new BadRequestException('enableAnalytics must be a boolean');
+  }
+
+  if (options.enableWebhooks !== undefined && typeof options.enableWebhooks !== 'boolean') {
+    throw new BadRequestException('enableWebhooks must be a boolean');
+  }
+
+  if (options.webhooks !== undefined) {
+    if (!Array.isArray(options.webhooks)) {
+      throw new BadRequestException('webhooks must be an array');
+    }
+    for (const webhook of options.webhooks) {
+      if (!webhook.url || typeof webhook.url !== 'string') {
+        throw new BadRequestException('webhook.url must be a non-empty string');
+      }
+      if (!Array.isArray(webhook.events) || webhook.events.length === 0) {
+        throw new BadRequestException('webhook.events must be a non-empty array');
+      }
+    }
+  }
 }

@@ -7,6 +7,7 @@ export interface RateLimitConfig {
 }
 
 export interface RateLimitStatus {
+  allowed: boolean;
   remaining: number;
   resetAt: number;
   limit: number;
@@ -33,63 +34,73 @@ export class RateLimitService {
    * Checks if a request should be rate limited.
    *
    * @param keyId - The API key ID
-   * @param config - Optional custom rate limit configuration
-   * @returns true if request should be allowed, false if rate limited
+   * @param maxRequests - Maximum requests allowed
+   * @param windowMs - Time window in milliseconds
+   * @returns Rate limit status
    */
-  checkRateLimit(keyId: string, config?: Partial<RateLimitConfig>): boolean {
-    const limitConfig: RateLimitConfig = {
-      ...this.defaultConfig,
-      ...config,
-    };
-
+  checkRateLimit(keyId: string, maxRequests: number, windowMs: number): RateLimitStatus {
     const now = Date.now();
     const entry = this.rateLimits.get(keyId);
 
     if (!entry || now >= entry.resetAt) {
+      const resetAt = now + windowMs;
       this.rateLimits.set(keyId, {
         count: 1,
-        resetAt: now + limitConfig.windowMs,
+        resetAt,
       });
-      return true;
+      return {
+        allowed: true,
+        limit: maxRequests,
+        remaining: maxRequests - 1,
+        resetAt,
+      };
     }
 
-    if (entry.count >= limitConfig.maxRequests) {
+    if (entry.count >= maxRequests) {
       ApiKeyLogger.warn(`Rate limit exceeded for key: ${keyId}`);
-      return false;
+      return {
+        allowed: false,
+        limit: maxRequests,
+        remaining: 0,
+        resetAt: entry.resetAt,
+      };
     }
 
     entry.count++;
-    return true;
+    return {
+      allowed: true,
+      limit: maxRequests,
+      remaining: maxRequests - entry.count,
+      resetAt: entry.resetAt,
+    };
   }
 
   /**
    * Gets the current rate limit status for a key.
    *
    * @param keyId - The API key ID
-   * @param config - Optional custom rate limit configuration
+   * @param maxRequests - Maximum requests allowed
+   * @param windowMs - Time window in milliseconds
    * @returns Rate limit status information
    */
-  getRateLimitStatus(keyId: string, config?: Partial<RateLimitConfig>): RateLimitStatus {
-    const limitConfig: RateLimitConfig = {
-      ...this.defaultConfig,
-      ...config,
-    };
-
+  getRateLimitStatus(keyId: string, maxRequests: number, windowMs: number): RateLimitStatus {
     const entry = this.rateLimits.get(keyId);
     const now = Date.now();
 
     if (!entry || now >= entry.resetAt) {
       return {
-        remaining: limitConfig.maxRequests,
-        resetAt: now + limitConfig.windowMs,
-        limit: limitConfig.maxRequests,
+        allowed: true,
+        remaining: maxRequests,
+        resetAt: now + windowMs,
+        limit: maxRequests,
       };
     }
 
     return {
-      remaining: Math.max(0, limitConfig.maxRequests - entry.count),
+      allowed: entry.count < maxRequests,
+      remaining: Math.max(0, maxRequests - entry.count),
       resetAt: entry.resetAt,
-      limit: limitConfig.maxRequests,
+      limit: maxRequests,
     };
   }
 

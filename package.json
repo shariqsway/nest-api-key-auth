@@ -61,6 +61,12 @@
     },
     "mongoose": {
       "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
     }
   },
   "dependencies": {

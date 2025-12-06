@@ -14,7 +14,10 @@ import { ApiKeyModuleOptions } from '../interfaces';
 import { ApiKeyLogger } from '../utils/logger.util';
 import { RateLimitService } from '../services/rate-limit.service';
 import { AuditLogService } from '../services/audit-log.service';
+import { AnalyticsService } from '../services/analytics.service';
 import { isIpAllowed, extractClientIp } from '../utils/ip.util';
+import { ANALYTICS_SERVICE_TOKEN } from '../api-key.module';
+import { Optional, Inject } from '@nestjs/common';
 
 /**
  * Guard that validates API keys from request headers.
@@ -28,6 +31,9 @@ export class ApiKeyGuard implements CanActivate {
     private readonly options: ApiKeyModuleOptions,
     private readonly rateLimitService?: RateLimitService,
     private readonly auditLogService?: AuditLogService,
+    @Optional()
+    @Inject(ANALYTICS_SERVICE_TOKEN)
+    private readonly analyticsService?: AnalyticsService,
   ) {}
 
   /**
@@ -58,6 +64,7 @@ export class ApiKeyGuard implements CanActivate {
           undefined,
           requestId,
         );
+        this.analyticsService?.recordFailure();
         throw new UnauthorizedException('API key is missing');
       }
 
@@ -73,6 +80,7 @@ export class ApiKeyGuard implements CanActivate {
           undefined,
           requestId,
         );
+        this.analyticsService?.recordFailure();
         throw new UnauthorizedException('Invalid API key');
       }
 
@@ -91,22 +99,22 @@ export class ApiKeyGuard implements CanActivate {
         }
       }
 
-      if (this.options.enableRateLimiting && this.rateLimitService) {
-        const rateLimitConfig = keyData.rateLimitMax
-          ? {
-              maxRequests: keyData.rateLimitMax,
-              windowMs: keyData.rateLimitWindowMs || 60000,
-            }
-          : undefined;
+      if (
+        this.options.enableRateLimiting &&
+        this.rateLimitService &&
+        keyData.rateLimitMax &&
+        keyData.rateLimitWindowMs
+      ) {
+        const maxRequests = keyData.rateLimitMax;
+        const windowMs = keyData.rateLimitWindowMs;
 
-        const isAllowed = this.rateLimitService.checkRateLimit(keyData.id, rateLimitConfig);
+        const status = this.rateLimitService.checkRateLimit(keyData.id, maxRequests, windowMs);
 
-        if (!isAllowed) {
-          const status = this.rateLimitService.getRateLimitStatus(keyData.id, rateLimitConfig);
-          response.setHeader('X-RateLimit-Limit', status.limit.toString());
-          response.setHeader('X-RateLimit-Remaining', status.remaining.toString());
-          response.setHeader('X-RateLimit-Reset', new Date(status.resetAt).toISOString());
+        response.setHeader('X-RateLimit-Limit', status.limit.toString());
+        response.setHeader('X-RateLimit-Remaining', status.remaining.toString());
+        response.setHeader('X-RateLimit-Reset', new Date(status.resetAt).toISOString());
 
+        if (!status.allowed) {
           await this.auditLogService?.logFailure(
             ipAddress,
             method,
@@ -117,11 +125,6 @@ export class ApiKeyGuard implements CanActivate {
           );
           throw new HttpException('Rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
         }
-
-        const status = this.rateLimitService.getRateLimitStatus(keyData.id, rateLimitConfig);
-        response.setHeader('X-RateLimit-Limit', status.limit.toString());
-        response.setHeader('X-RateLimit-Remaining', status.remaining.toString());
-        response.setHeader('X-RateLimit-Reset', new Date(status.resetAt).toISOString());
       }
 
       await this.apiKeyService.updateLastUsed(keyData.id).catch((error) => {

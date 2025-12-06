@@ -40,6 +40,8 @@ export type AdapterType = 'prisma' | 'typeorm' | 'mongoose' | 'custom';
 
 import { AuditLogOptions } from '../services/audit-log.service';
 import { HashAlgorithm } from '../utils/hash.util';
+import { WebhookConfig } from '../services/webhook.service';
+import { RedisClient } from '../types/redis.types';
 
 export interface ApiKeyModuleOptions {
   secretLength?: number;
@@ -54,8 +56,12 @@ export interface ApiKeyModuleOptions {
   enableRateLimiting?: boolean;
   enableAuditLogging?: boolean;
   enableCaching?: boolean;
+  enableAnalytics?: boolean;
+  enableWebhooks?: boolean;
   cacheTtlMs?: number;
   auditLogOptions?: AuditLogOptions;
   hashAlgorithm?: HashAlgorithm;
   bcryptRounds?: number;
+  redisClient?: RedisClient;
+  webhooks?: WebhookConfig[];
 }

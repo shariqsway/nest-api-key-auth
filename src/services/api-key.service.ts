@@ -6,7 +6,12 @@ import { ApiKeyNotFoundException, ApiKeyAlreadyRevokedException } from '../excep
 import { validateTokenFormat, validateScopeFormat } from '../utils/validation.util';
 import { ApiKeyLogger } from '../utils/logger.util';
 import { CacheService } from './cache.service';
+import { RedisCacheService } from './redis-cache.service';
 import { HashUtil, HashAlgorithm } from '../utils/hash.util';
+import { WebhookService } from './webhook.service';
+import { AnalyticsService } from './analytics.service';
+import { Optional, Inject } from '@nestjs/common';
+import { WEBHOOK_SERVICE_TOKEN, ANALYTICS_SERVICE_TOKEN } from '../api-key.module';
 
 @Injectable()
 export class ApiKeyService {
@@ -16,8 +21,12 @@ export class ApiKeyService {
   constructor(
     private readonly adapter: IApiKeyAdapter,
     private readonly secretLength: number = 32,
-    private readonly cacheService?: CacheService,
+    private readonly cacheService?: CacheService | RedisCacheService,
     hashAlgorithm: HashAlgorithm = 'bcrypt',
+    @Optional() @Inject(WEBHOOK_SERVICE_TOKEN) private readonly webhookService?: WebhookService,
+    @Optional()
+    @Inject(ANALYTICS_SERVICE_TOKEN)
+    private readonly analyticsService?: AnalyticsService,
   ) {
     this.hashAlgorithm = hashAlgorithm;
   }
@@ -61,10 +70,26 @@ export class ApiKeyService {
       });
 
       if (this.cacheService) {
-        this.cacheService.set(apiKey);
+        const setResult = this.cacheService.set(apiKey);
+        if (setResult instanceof Promise) {
+          await setResult;
+        }
       }
 
       ApiKeyLogger.log(`API key created: ${apiKey.id} (${apiKey.name})`);
+
+      await this.webhookService
+        ?.sendWebhook('key.created', {
+          keyId: apiKey.id,
+          keyName: apiKey.name,
+          scopes: apiKey.scopes,
+          expiresAt: apiKey.expiresAt,
+        })
+        .catch((error) => {
+          ApiKeyLogger.warn(
+            `Failed to send webhook for key creation: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
 
       return {
         id: apiKey.id,
@@ -117,13 +142,17 @@ export class ApiKeyService {
       let candidates: ApiKey[] = [];
 
       if (this.cacheService) {
-        candidates = this.cacheService.getByPrefix(keyPrefix);
+        const prefixResult = this.cacheService.getByPrefix(keyPrefix);
+        candidates = prefixResult instanceof Promise ? await prefixResult : prefixResult;
       }
 
       if (candidates.length === 0) {
         candidates = await this.adapter.findByKeyPrefix(keyPrefix);
         if (this.cacheService && candidates.length > 0) {
-          this.cacheService.setMany(candidates);
+          const setManyResult = this.cacheService.setMany(candidates);
+          if (setManyResult instanceof Promise) {
+            await setManyResult;
+          }
         }
       }
 
@@ -249,6 +278,22 @@ export class ApiKeyService {
       }
 
       ApiKeyLogger.log(`Key rotated: ${oldKeyId} -> ${newKey.id}`);
+
+      await this.webhookService
+        ?.sendWebhook('key.rotated', {
+          keyId: newKey.id,
+          keyName: newKey.name,
+          oldKeyId: oldKey.id,
+          oldKeyName: oldKey.name,
+          revokeOldKey: options.revokeOldKey || false,
+          gracePeriodHours: options.gracePeriodHours,
+        })
+        .catch((error) => {
+          ApiKeyLogger.warn(
+            `Failed to send webhook for key rotation: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
+
       return newKey;
     } catch (error) {
       if (error instanceof ApiKeyNotFoundException) {
@@ -362,8 +407,23 @@ export class ApiKeyService {
       ApiKeyLogger.log(`API key revoked: ${id} (${revokedKey.name})`);
 
       if (this.cacheService) {
-        this.cacheService.invalidate(id);
+        const invalidateResult = this.cacheService.invalidate(id);
+        if (invalidateResult instanceof Promise) {
+          await invalidateResult;
+        }
       }
+
+      await this.webhookService
+        ?.sendWebhook('key.revoked', {
+          keyId: revokedKey.id,
+          keyName: revokedKey.name,
+          revokedAt: revokedKey.revokedAt,
+        })
+        .catch((error) => {
+          ApiKeyLogger.warn(
+            `Failed to send webhook for key revocation: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
 
       return revokedKey;
     } catch (error) {

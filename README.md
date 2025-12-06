@@ -71,7 +71,20 @@ import { ApiKeyModule } from 'nest-api-key-auth';
       enableRateLimiting: true, // Optional: enable rate limiting (default: true)
       enableAuditLogging: true, // Optional: enable audit logging (default: true)
       enableCaching: true, // Optional: enable caching (default: true)
+      enableAnalytics: true, // Optional: enable usage analytics (default: false)
+      enableWebhooks: true, // Optional: enable webhook notifications (default: false)
       cacheTtlMs: 300000, // Optional: cache TTL in milliseconds (default: 5 minutes)
+      redisClient: redis, // Optional: Redis client for distributed rate limiting/caching
+      webhooks: [
+        // Optional: webhook configurations
+        {
+          url: 'https://your-app.com/webhooks/api-keys',
+          secret: 'your-webhook-secret',
+          events: ['key.created', 'key.revoked', 'key.rotated', 'key.expired'],
+          retryAttempts: 3,
+          timeout: 5000,
+        },
+      ],
       auditLogOptions: {
         logToConsole: true,
         logToDatabase: false,
@@ -239,9 +252,14 @@ curl -H "Cookie: api_key=your-api-key-here" http://localhost:3000/projects
 ✅ Key management (create, find, list, revoke, rotate)  
 ✅ Key rotation with grace period support  
 ✅ **Rate limiting** - Per-key rate limiting with configurable limits  
+✅ **Redis support** - Distributed rate limiting and caching with Redis (with in-memory fallback)  
 ✅ **IP whitelisting** - Restrict keys to specific IP addresses or CIDR ranges  
 ✅ **Audit logging** - Comprehensive request logging for security and compliance  
-✅ **Caching layer** - In-memory caching for improved performance  
+✅ **Caching layer** - In-memory or Redis-based caching for improved performance  
+✅ **Usage analytics** - Track API key usage, performance metrics, and request statistics  
+✅ **Webhook notifications** - Real-time notifications for key events (create, revoke, rotate, expire)  
+✅ **Bulk operations** - Create or revoke multiple API keys in a single operation  
+✅ **Expiration monitoring** - Automatic monitoring and notifications for expiring keys  
 ✅ Comprehensive input validation (token format, scope format, configuration)  
 ✅ Robust error handling with detailed logging  
 ✅ Multiple ORM support (Prisma, TypeORM, Mongoose, Custom)  
@@ -742,11 +760,247 @@ npx nest-api-key rotate <key-id> --grace 24
 
 **Note:** The CLI tool currently provides guidance and code examples. Full implementation requires integration with your NestJS application's ApiKeyService.
 
-## 🚧 Coming Soon
+## 🔴 Redis Support
 
-- Redis-based rate limiting and caching for distributed systems
-- Usage analytics dashboard
-- Webhook notifications for key events
+For distributed systems with multiple instances, use Redis for rate limiting and caching:
+
+### Installation
+
+```bash
+npm install ioredis
+npm install -D @types/ioredis
+```
+
+### Configuration
+
+```typescript
+import Redis from 'ioredis';
+import { ApiKeyModule } from 'nest-api-key-auth';
+
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+  // Add your Redis configuration
+});
+
+@Module({
+  imports: [
+    ApiKeyModule.register({
+      redisClient: redis, // Automatically uses Redis for rate limiting and caching
+      enableRateLimiting: true,
+      enableCaching: true,
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+When `redisClient` is provided, the library automatically uses Redis for:
+- **Rate limiting**: Distributed rate limit tracking across all instances
+- **Caching**: Shared cache across all instances
+
+If Redis is unavailable, the library automatically falls back to in-memory implementations.
+
+## 📊 Usage Analytics
+
+Track API key usage and performance metrics:
+
+### Enable Analytics
+
+```typescript
+ApiKeyModule.register({
+  enableAnalytics: true,
+})
+```
+
+### Using Analytics Service
+
+```typescript
+import { AnalyticsService, ANALYTICS_SERVICE_TOKEN } from 'nest-api-key-auth';
+import { Inject, Controller, Get, Param } from '@nestjs/common';
+
+@Controller('analytics')
+export class AnalyticsController {
+  constructor(
+    @Inject(ANALYTICS_SERVICE_TOKEN) private readonly analyticsService: AnalyticsService,
+  ) {}
+
+  @Get('key/:keyId')
+  async getKeyMetrics(@Param('keyId') keyId: string) {
+    return await this.analyticsService.getKeyMetrics(keyId);
+  }
+
+  @Get('overview')
+  async getAnalytics() {
+    return await this.analyticsService.getAnalytics();
+  }
+}
+```
+
+**Metrics tracked:**
+- Request counts (total, success, failure)
+- Response times
+- Last used timestamps
+- Error rates
+- Top performing keys
+
+## 🔔 Webhook Notifications
+
+Receive real-time notifications for API key events:
+
+### Configuration
+
+```typescript
+ApiKeyModule.register({
+  enableWebhooks: true,
+  webhooks: [
+    {
+      url: 'https://your-app.com/webhooks/api-keys',
+      secret: 'your-webhook-secret',
+      events: ['key.created', 'key.revoked', 'key.rotated', 'key.expired', 'key.expiring'],
+      retryAttempts: 3,
+      timeout: 5000,
+    },
+  ],
+})
+```
+
+### Supported Events
+
+- `key.created` - When a new API key is created
+- `key.revoked` - When an API key is revoked
+- `key.rotated` - When an API key is rotated
+- `key.expired` - When an API key expires
+- `key.expiring` - When an API key is about to expire (configurable thresholds)
+
+### Webhook Payload Format
+
+```json
+{
+  "event": "key.created",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "data": {
+    "keyId": "key-123",
+    "keyName": "My API Key",
+    "scopes": ["read:projects"],
+    "expiresAt": "2025-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Webhook Endpoint Example
+
+```typescript
+@Controller('webhooks')
+export class WebhookController {
+  @Post('api-keys')
+  async handleWebhook(@Req() req: Request) {
+    const secret = req.headers['x-webhook-secret'];
+    if (secret !== 'your-webhook-secret') {
+      throw new UnauthorizedException('Invalid webhook secret');
+    }
+
+    const payload = req.body;
+    console.log('Webhook event:', payload.event);
+    console.log('Data:', payload.data);
+
+    // Handle the event
+    switch (payload.event) {
+      case 'key.created':
+        // Notify your team, update dashboard, etc.
+        break;
+      case 'key.revoked':
+        // Log security event, update access lists, etc.
+        break;
+    }
+  }
+}
+```
+
+## 📦 Bulk Operations
+
+Create or revoke multiple API keys efficiently:
+
+```typescript
+import { BulkOperationsService } from 'nest-api-key-auth';
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class KeyManagementService {
+  constructor(private readonly bulkOps: BulkOperationsService) {}
+
+  async createMultipleKeys(names: string[]) {
+    const result = await this.bulkOps.bulkCreate(
+      names.map((name) => ({ name, scopes: ['read:projects'] })),
+    );
+
+    console.log(`Created ${result.success} keys, ${result.failed} failed`);
+    result.results.forEach((r) => {
+      if (r.success) {
+        console.log(`✓ ${r.name}: ${r.keyId}`);
+      } else {
+        console.log(`✗ ${r.name}: ${r.error}`);
+      }
+    });
+
+    return result;
+  }
+
+  async revokeMultipleKeys(keyIds: string[]) {
+    const result = await this.bulkOps.bulkRevoke(keyIds);
+    console.log(`Revoked ${result.success} keys, ${result.failed} failed`);
+    return result;
+  }
+}
+```
+
+## ⏰ Expiration Monitoring
+
+Automatically monitor and notify about expiring API keys:
+
+### Enable Monitoring
+
+```typescript
+import { ExpirationNotificationService } from 'nest-api-key-auth';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+
+@Injectable()
+export class AppService implements OnModuleInit {
+  constructor(
+    private readonly expirationService: ExpirationNotificationService,
+  ) {}
+
+  onModuleInit() {
+    // Start monitoring (checks every 24 hours by default)
+    this.expirationService.startMonitoring();
+  }
+
+  async getKeysExpiringSoon(days: number) {
+    return await this.expirationService.getKeysExpiringSoon(days);
+  }
+}
+```
+
+The service automatically:
+- Checks for expiring keys at configurable intervals (default: 24 hours)
+- Sends notifications when keys are about to expire (default: 30, 7, 1 days before)
+- Sends notifications when keys have expired
+- Integrates with webhook service if enabled
+
+### Custom Configuration
+
+```typescript
+// In your module factory
+const expirationService = new ExpirationNotificationService(
+  adapter,
+  webhookService,
+  {
+    checkIntervalMs: 12 * 60 * 60 * 1000, // Check every 12 hours
+    warningDaysBeforeExpiration: [30, 14, 7, 1], // Custom warning thresholds
+    enableWebhooks: true,
+  },
+);
+```
 
 ## 👤 Author
 
