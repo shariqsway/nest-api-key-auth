@@ -1,6 +1,6 @@
 {
   "name": "nest-api-key-auth",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A NestJS module for API key-based authentication with built-in security, scopes, and multiple database adapters",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -60,9 +60,6 @@
       "optional": true
     },
     "mongoose": {
-      "optional": true
-    },
-    "ioredis": {
       "optional": true
     },
     "ioredis": {
