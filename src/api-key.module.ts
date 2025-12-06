@@ -23,6 +23,19 @@ import { WebhookService } from './services/webhook.service';
 import { BulkOperationsService } from './services/bulk-operations.service';
 import { ExpirationNotificationService } from './services/expiration-notification.service';
 import { RedisClient } from './types/redis.types';
+import { PrismaAuditLogAdapter } from './adapters/prisma-audit-log.adapter';
+import {
+  TypeOrmAuditLogAdapter,
+  TYPEORM_AUDIT_LOG_REPOSITORY_KEY,
+  TypeOrmAuditLogRepository,
+} from './adapters/typeorm-audit-log.adapter';
+import {
+  MongooseAuditLogAdapter,
+  MONGOOSE_AUDIT_LOG_MODEL_KEY,
+  MongooseAuditLogModel,
+} from './adapters/mongoose-audit-log.adapter';
+import { IAuditLogAdapter } from './adapters/audit-log.adapter';
+import { AUDIT_LOG_ADAPTER_TOKEN } from './services/audit-log.service';
 
 export const CACHE_SERVICE_TOKEN = 'CACHE_SERVICE';
 export const RATE_LIMIT_SERVICE_TOKEN = 'RATE_LIMIT_SERVICE';
@@ -64,19 +77,27 @@ export class ApiKeyModule {
         useValue: options.customAdapter,
       });
     } else if (adapterType === 'prisma') {
+      // Always provide PRISMA_CLIENT_KEY for audit log adapter
       if (options.prismaClient) {
         providers.push({
           provide: PRISMA_CLIENT_KEY,
           useValue: options.prismaClient,
         });
+      } else {
+        // Create a shared PrismaClient instance
+        const sharedPrisma = new PrismaClient();
+        providers.push({
+          provide: PRISMA_CLIENT_KEY,
+          useValue: sharedPrisma,
+        });
       }
 
       providers.push({
         provide: API_KEY_ADAPTER,
-        useFactory: (prismaClient?: PrismaClient) => {
+        useFactory: (prismaClient: PrismaClient) => {
           return new PrismaAdapter(prismaClient);
         },
-        inject: options.prismaClient ? [PRISMA_CLIENT_KEY] : [],
+        inject: [PRISMA_CLIENT_KEY],
       });
     } else if (adapterType === 'typeorm') {
       if (!options.typeOrmRepository) {
@@ -160,9 +181,64 @@ export class ApiKeyModule {
     }
 
     if (defaultOptions.enableAuditLogging !== false) {
+      // Setup audit log adapter if database logging is enabled
+      if (defaultOptions.auditLogOptions?.logToDatabase) {
+        const adapterType = defaultOptions.adapter || 'prisma';
+
+        if (adapterType === 'prisma') {
+          providers.push({
+            provide: AUDIT_LOG_ADAPTER_TOKEN,
+            useFactory: (prisma: PrismaClient) => {
+              const prismaInstance = options.prismaClient || prisma;
+              return new PrismaAuditLogAdapter(prismaInstance);
+            },
+            inject: options.prismaClient ? [PRISMA_CLIENT_KEY] : [PRISMA_CLIENT_KEY],
+          });
+        } else if (adapterType === 'typeorm') {
+          if (!options.typeOrmAuditLogRepository) {
+            ApiKeyLogger.warn(
+              'TypeORM audit log repository not provided. Database audit logging will not work.',
+              'ApiKeyModule',
+            );
+          } else {
+            providers.push({
+              provide: TYPEORM_AUDIT_LOG_REPOSITORY_KEY,
+              useValue: options.typeOrmAuditLogRepository,
+            });
+            providers.push({
+              provide: AUDIT_LOG_ADAPTER_TOKEN,
+              useFactory: (repo: TypeOrmAuditLogRepository) => new TypeOrmAuditLogAdapter(repo),
+              inject: [TYPEORM_AUDIT_LOG_REPOSITORY_KEY],
+            });
+          }
+        } else if (adapterType === 'mongoose') {
+          if (!options.mongooseAuditLogModel) {
+            ApiKeyLogger.warn(
+              'Mongoose audit log model not provided. Database audit logging will not work.',
+              'ApiKeyModule',
+            );
+          } else {
+            providers.push({
+              provide: MONGOOSE_AUDIT_LOG_MODEL_KEY,
+              useValue: options.mongooseAuditLogModel,
+            });
+            providers.push({
+              provide: AUDIT_LOG_ADAPTER_TOKEN,
+              useFactory: (model: MongooseAuditLogModel) => new MongooseAuditLogAdapter(model),
+              inject: [MONGOOSE_AUDIT_LOG_MODEL_KEY],
+            });
+          }
+        }
+      }
+
       providers.push({
         provide: AUDIT_LOG_SERVICE_TOKEN,
-        useValue: new AuditLogService(defaultOptions.auditLogOptions),
+        useFactory: (adapter?: IAuditLogAdapter) => {
+          return new AuditLogService(defaultOptions.auditLogOptions, adapter);
+        },
+        inject: [
+          ...(defaultOptions.auditLogOptions?.logToDatabase ? [AUDIT_LOG_ADAPTER_TOKEN] : []),
+        ],
       });
     }
 

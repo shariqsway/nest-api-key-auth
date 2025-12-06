@@ -42,6 +42,8 @@ import { AuditLogOptions } from '../services/audit-log.service';
 import { HashAlgorithm } from '../utils/hash.util';
 import { WebhookConfig } from '../services/webhook.service';
 import { RedisClient } from '../types/redis.types';
+import type { TypeOrmAuditLogRepository } from '../adapters/typeorm-audit-log.adapter';
+import type { MongooseAuditLogModel } from '../adapters/mongoose-audit-log.adapter';
 
 export interface ApiKeyModuleOptions {
   secretLength?: number;
@@ -64,4 +66,6 @@ export interface ApiKeyModuleOptions {
   bcryptRounds?: number;
   redisClient?: RedisClient;
   webhooks?: WebhookConfig[];
+  typeOrmAuditLogRepository?: TypeOrmAuditLogRepository;
+  mongooseAuditLogModel?: MongooseAuditLogModel;
 }

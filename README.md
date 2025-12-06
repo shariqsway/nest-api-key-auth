@@ -7,53 +7,157 @@
 [![GitHub license](https://img.shields.io/github/license/shariqsway/nest-api-key-auth.svg)](https://github.com/shariqsway/nest-api-key-auth/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 
-A NestJS module that makes API key–based authentication extremely easy, secure, and configurable.
+A production-ready NestJS module for API key-based authentication with built-in security, scopes, and multiple database adapters.
 
-> **⚠️ Development Status:** This library is currently under active development and is not yet ready for production use. The API may change in future versions.
+> **Production Ready:** This library is production-ready and actively maintained. The API is stable, and all core features are fully implemented and tested.
 
-## 📚 Documentation
+---
 
-- [Quick Start](#-quick-start) - Get started in minutes
-- [Migration Guide](./MIGRATION_GUIDE.md) - Migrate existing databases to support new features
-- [Database Configuration](./examples/database-configs/) - Examples for PostgreSQL, MySQL, SQLite, MongoDB, etc.
-- [Examples](./examples/) - Code examples for all features
-- [Advanced Features Examples](./examples/advanced-features/) - Rate limiting, IP whitelisting, audit logging, caching
-- [Database Setup Examples](./examples/database-setup/) - PostgreSQL, MySQL, SQLite, MongoDB setup examples
+## Table of Contents
 
-## 🚀 Quick Start
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [Basic Setup](#basic-setup)
+  - [Protect Routes](#protect-routes)
+  - [Create API Keys](#create-api-keys)
+  - [Use API Keys](#use-api-keys)
+- [CLI Tool](#cli-tool)
+- [Configuration](#configuration)
+  - [Module Options](#module-options)
+  - [Adapter Selection](#adapter-selection)
+  - [Custom Key Sources](#custom-key-sources)
+- [API Reference](#api-reference)
+  - [ApiKeyService](#apikeyservice)
+  - [Decorators](#decorators)
+  - [Exceptions](#exceptions)
+- [Database Support](#database-support)
+  - [Supported Databases](#supported-databases)
+  - [Database Configuration](#database-configuration)
+  - [Database Schema](#database-schema)
+  - [ORM Setup Guides](#orm-setup-guides)
+- [Advanced Features](#advanced-features)
+  - [Rate Limiting](#rate-limiting)
+  - [IP Whitelisting](#ip-whitelisting)
+  - [Audit Logging](#audit-logging)
+  - [Caching](#caching)
+  - [Redis Support](#redis-support)
+  - [Usage Analytics](#usage-analytics)
+  - [Webhook Notifications](#webhook-notifications)
+  - [Bulk Operations](#bulk-operations)
+  - [Expiration Monitoring](#expiration-monitoring)
+- [Security](#security)
+- [Testing](#testing)
+- [Logging](#logging)
+- [Validation](#validation)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Installation
+---
+
+## Overview
+
+`nest-api-key-auth` is a comprehensive NestJS module that simplifies API key-based authentication. It provides a complete solution for managing API keys, protecting routes, and enforcing fine-grained permissions through scopes.
+
+**Key Benefits:**
+
+- Zero boilerplate - Get started in minutes
+- Production-ready with comprehensive testing
+- Database-agnostic - Works with any database through ORM adapters
+- Type-safe - Full TypeScript support
+- Secure by default - Built-in hashing, validation, and security features
+- Highly configurable - Customize every aspect of the authentication flow
+
+---
+
+## Features
+
+**Core Features:**
+
+- API key creation with secure hashing (bcrypt or argon2)
+- Route protection with `@ApiKeyAuth()` decorator
+- Scope-based permissions with `@Scopes()` decorator
+- Multiple key sources (headers, query params, cookies)
+- Key expiration dates and last used tracking
+- Key management (create, find, list, revoke, rotate)
+- Key rotation with grace period support
+
+**Advanced Features:**
+
+- Rate limiting - Per-key rate limiting with configurable limits
+- Redis support - Distributed rate limiting and caching with Redis (with in-memory fallback)
+- IP whitelisting - Restrict keys to specific IP addresses or CIDR ranges
+- Audit logging - Comprehensive request logging for security and compliance (with database storage)
+- Caching layer - In-memory or Redis-based caching for improved performance
+- Usage analytics - Track API key usage, performance metrics, and request statistics
+- Webhook notifications - Real-time notifications for key events (create, revoke, rotate, expire)
+- Bulk operations - Create or revoke multiple API keys in a single operation
+- Expiration monitoring - Automatic monitoring and notifications for expiring keys
+- CLI tool - Command-line interface for managing API keys directly from terminal
+- Database audit logging - Store audit logs in database with query and analytics capabilities
+
+**Developer Experience:**
+
+- Comprehensive input validation (token format, scope format, configuration)
+- Robust error handling with detailed logging
+- Multiple ORM support (Prisma, TypeORM, Mongoose, Custom)
+- PrismaClient injection support
+- Built-in logging mechanism
+- Health check functionality
+- Comprehensive test suite
+- Ready-to-use migration files
+- Example implementations
+
+---
+
+## Installation
 
 ```bash
 npm install nest-api-key-auth @prisma/client
 npm install -D prisma
 ```
 
-### Setup Prisma
+**Peer Dependencies:**
 
-1. Initialize Prisma (if not already done):
+- `@nestjs/common` ^10.0.0
+- `@nestjs/core` ^10.0.0
+- `reflect-metadata` ^0.1.13
+- `rxjs` ^7.8.0
+
+**Optional Dependencies:**
+
+- `@prisma/client` ^7.0.0 (for Prisma adapter)
+- `typeorm` (for TypeORM adapter)
+- `mongoose` (for Mongoose adapter)
+- `ioredis` (for Redis support)
+
+---
+
+## Quick Start
+
+### Basic Setup
+
+1. **Initialize Prisma** (if using Prisma adapter):
 
 ```bash
 npx prisma init
 ```
 
-2. Update your `schema.prisma` to include the API key schema, or run:
+2. **Update your `schema.prisma`** to include the API key schema, or run:
 
 ```bash
 npx prisma migrate dev --name add_api_keys
 ```
 
-3. Generate Prisma Client:
+3. **Generate Prisma Client**:
 
 ```bash
 npx prisma generate
 ```
 
-### Usage
-
-#### 1. Import the Module
-
-**Using Prisma (default):**
+4. **Import the Module**:
 
 ```typescript
 import { Module } from '@nestjs/common';
@@ -65,104 +169,13 @@ import { ApiKeyModule } from 'nest-api-key-auth';
       adapter: 'prisma', // Optional: 'prisma' is the default
       secretLength: 32,
       headerName: 'x-api-key',
-      prismaClient: prisma, // Optional: use existing PrismaClient instance
-      hashAlgorithm: 'argon2', // Optional: 'bcrypt' (default) or 'argon2'
-      bcryptRounds: 10, // Optional: only used when hashAlgorithm is 'bcrypt'
-      enableRateLimiting: true, // Optional: enable rate limiting (default: true)
-      enableAuditLogging: true, // Optional: enable audit logging (default: true)
-      enableCaching: true, // Optional: enable caching (default: true)
-      enableAnalytics: true, // Optional: enable usage analytics (default: false)
-      enableWebhooks: true, // Optional: enable webhook notifications (default: false)
-      cacheTtlMs: 300000, // Optional: cache TTL in milliseconds (default: 5 minutes)
-      redisClient: redis, // Optional: Redis client for distributed rate limiting/caching
-      webhooks: [
-        // Optional: webhook configurations
-        {
-          url: 'https://your-app.com/webhooks/api-keys',
-          secret: 'your-webhook-secret',
-          events: ['key.created', 'key.revoked', 'key.rotated', 'key.expired'],
-          retryAttempts: 3,
-          timeout: 5000,
-        },
-      ],
-      auditLogOptions: {
-        logToConsole: true,
-        logToDatabase: false,
-        onLog: async (entry) => {
-          // Custom logging logic
-          console.log('Audit log:', entry);
-        },
-      },
     }),
   ],
 })
 export class AppModule {}
 ```
 
-**Using TypeORM:**
-
-```typescript
-import { Module } from '@nestjs/common';
-import { ApiKeyModule } from 'nest-api-key-auth';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { ApiKeyEntity } from './entities/api-key.entity';
-
-@Module({
-  imports: [
-    ApiKeyModule.register({
-      adapter: 'typeorm',
-      typeOrmRepository: getRepositoryToken(ApiKeyEntity), // Your TypeORM repository
-      secretLength: 32,
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-**Using Mongoose:**
-
-```typescript
-import { Module } from '@nestjs/common';
-import { ApiKeyModule } from 'nest-api-key-auth';
-import { getModelToken } from '@nestjs/mongoose';
-import { ApiKeySchema } from './schemas/api-key.schema';
-
-@Module({
-  imports: [
-    ApiKeyModule.register({
-      adapter: 'mongoose',
-      mongooseModel: getModelToken('ApiKey'), // Your Mongoose model
-      secretLength: 32,
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-**Using Custom Adapter:**
-
-```typescript
-import { Module } from '@nestjs/common';
-import { ApiKeyModule } from 'nest-api-key-auth';
-import { IApiKeyAdapter } from 'nest-api-key-auth';
-
-class MyCustomAdapter implements IApiKeyAdapter {
-  // Implement all required methods
-}
-
-@Module({
-  imports: [
-    ApiKeyModule.register({
-      adapter: 'custom',
-      customAdapter: new MyCustomAdapter(),
-      secretLength: 32,
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-#### 2. Protect Your Routes
+### Protect Routes
 
 ```typescript
 import { Controller, Get, Post } from '@nestjs/common';
@@ -192,7 +205,7 @@ export class ProjectController {
 }
 ```
 
-#### 3. Create and Manage API Keys
+### Create API Keys
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -210,7 +223,7 @@ export class AppService {
     });
 
     console.log('API Key created:', result.token);
-    // ⚠️ Store this token securely - it's only shown once!
+    // Store this token securely - it's only shown once!
 
     return result;
   }
@@ -226,7 +239,7 @@ export class AppService {
 }
 ```
 
-#### 4. Use the API Key
+### Use API Keys
 
 API keys can be provided via headers, query parameters, or cookies:
 
@@ -241,54 +254,201 @@ curl "http://localhost:3000/projects?api_key=your-api-key-here"
 curl -H "Cookie: api_key=your-api-key-here" http://localhost:3000/projects
 ```
 
-## 📋 Features
+---
 
-✅ API key creation with secure hashing  
-✅ Route protection with `@ApiKeyAuth()` decorator  
-✅ Scope-based permissions with `@Scopes()` decorator  
-✅ Multiple key sources (headers, query params, cookies)  
-✅ Key expiration dates  
-✅ Last used timestamp tracking  
-✅ Key management (create, find, list, revoke, rotate)  
-✅ Key rotation with grace period support  
-✅ **Rate limiting** - Per-key rate limiting with configurable limits  
-✅ **Redis support** - Distributed rate limiting and caching with Redis (with in-memory fallback)  
-✅ **IP whitelisting** - Restrict keys to specific IP addresses or CIDR ranges  
-✅ **Audit logging** - Comprehensive request logging for security and compliance  
-✅ **Caching layer** - In-memory or Redis-based caching for improved performance  
-✅ **Usage analytics** - Track API key usage, performance metrics, and request statistics  
-✅ **Webhook notifications** - Real-time notifications for key events (create, revoke, rotate, expire)  
-✅ **Bulk operations** - Create or revoke multiple API keys in a single operation  
-✅ **Expiration monitoring** - Automatic monitoring and notifications for expiring keys  
-✅ Comprehensive input validation (token format, scope format, configuration)  
-✅ Robust error handling with detailed logging  
-✅ Multiple ORM support (Prisma, TypeORM, Mongoose, Custom)  
-✅ PrismaClient injection support  
-✅ Built-in logging mechanism  
-✅ Health check functionality  
-✅ Comprehensive test suite  
-✅ Ready-to-use migration files  
-✅ Example implementations
+## CLI Tool
 
-## 🔒 Security
+The library includes a command-line tool for managing API keys directly from your terminal:
 
-- API keys are hashed using bcrypt (default) or argon2 before storage
-- Choose your preferred hashing algorithm: `hashAlgorithm: 'bcrypt'` or `hashAlgorithm: 'argon2'`
-- Argon2 is recommended for new projects (winner of Password Hashing Competition)
-- Only the hashed version is stored in the database
-- Plaintext token is returned only once during creation
-- Keys can be revoked at any time
-- Keys can have expiration dates
-- Last used timestamp tracking for security monitoring
-- Automatic expiration checking on validation
-- Token format validation (hexadecimal only)
-- Scope format validation (resource:action pattern)
-- Configuration validation at module initialization
-- **Rate limiting** - Prevent abuse with per-key rate limits
-- **IP whitelisting** - Restrict access to specific IP addresses
-- **Audit logging** - Track all API key usage for security monitoring
+```bash
+# Create a new API key
+npx nest-api-key create --name "My App" --scopes "read:projects,write:projects"
 
-## 📝 API Reference
+# List all API keys
+npx nest-api-key list
+
+# List including revoked keys
+npx nest-api-key list --all
+
+# Revoke an API key
+npx nest-api-key revoke <key-id>
+
+# Rotate an API key (create new, optionally revoke old)
+npx nest-api-key rotate <key-id> --revoke-old
+
+# Set database URL via environment variable
+export DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+npx nest-api-key create --name "My App"
+
+# Or pass database URL directly
+npx nest-api-key create --name "My App" --db-url "postgresql://..."
+```
+
+**CLI Features:**
+
+- Direct database access (no NestJS app required)
+- Create, list, revoke, and rotate API keys
+- Support for all key features (scopes, expiration, IP whitelisting, rate limits)
+- Works with Prisma adapter (TypeORM and Mongoose support coming soon)
+
+---
+
+## Configuration
+
+### Module Options
+
+```typescript
+ApiKeyModule.register({
+  // Basic configuration
+  secretLength: 32, // Length of generated API keys
+  headerName: 'x-api-key', // Header name for API keys
+  queryParamName: 'api_key', // Query parameter name
+  cookieName: 'api_key', // Cookie name
+
+  // Adapter configuration
+  adapter: 'prisma', // 'prisma' | 'typeorm' | 'mongoose' | 'custom'
+  prismaClient: prisma, // Optional: use existing PrismaClient instance
+  typeOrmRepository: repository, // Required for TypeORM adapter
+  mongooseModel: model, // Required for Mongoose adapter
+  customAdapter: adapter, // Required for custom adapter
+
+  // Hashing configuration
+  hashAlgorithm: 'bcrypt', // 'bcrypt' | 'argon2'
+  bcryptRounds: 10, // Only used when hashAlgorithm is 'bcrypt'
+
+  // Feature flags
+  enableRateLimiting: true,
+  enableAuditLogging: true,
+  enableCaching: true,
+  enableAnalytics: true,
+  enableWebhooks: true,
+
+  // Cache configuration
+  cacheTtlMs: 300000, // Cache TTL in milliseconds (default: 5 minutes)
+
+  // Redis configuration
+  redisClient: redis, // Optional: Redis client for distributed rate limiting/caching
+
+  // Audit logging configuration
+  auditLogOptions: {
+    logToConsole: true,
+    logToDatabase: false,
+    retentionDays: 90,
+    onLog: async (entry) => {
+      // Custom logging logic
+    },
+  },
+
+  // Webhook configuration
+  webhooks: [
+    {
+      url: 'https://your-app.com/webhooks/api-keys',
+      secret: 'your-webhook-secret',
+      events: ['key.created', 'key.revoked', 'key.rotated', 'key.expired'],
+      retryAttempts: 3,
+      timeout: 5000,
+    },
+  ],
+
+  // Expiration notification configuration
+  expirationNotificationOptions: {
+    enabled: true,
+    checkIntervalMs: 3600000, // 1 hour
+    warningThresholdsDays: [30, 7, 1],
+  },
+});
+```
+
+### Adapter Selection
+
+**Prisma (Default):**
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+@Module({
+  imports: [
+    ApiKeyModule.register({
+      adapter: 'prisma',
+      prismaClient: prisma, // Optional: use existing instance
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+**TypeORM:**
+
+```typescript
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { ApiKeyEntity } from './entities/api-key.entity';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([ApiKeyEntity]),
+    ApiKeyModule.register({
+      adapter: 'typeorm',
+      typeOrmRepository: getRepositoryToken(ApiKeyEntity),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+**Mongoose:**
+
+```typescript
+import { getModelToken } from '@nestjs/mongoose';
+
+@Module({
+  imports: [
+    MongooseModule.forFeature([{ name: 'ApiKey', schema: ApiKeySchema }]),
+    ApiKeyModule.register({
+      adapter: 'mongoose',
+      mongooseModel: getModelToken('ApiKey'),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+**Custom Adapter:**
+
+```typescript
+import { IApiKeyAdapter } from 'nest-api-key-auth';
+
+class MyCustomAdapter implements IApiKeyAdapter {
+  // Implement all required methods
+}
+
+@Module({
+  imports: [
+    ApiKeyModule.register({
+      adapter: 'custom',
+      customAdapter: new MyCustomAdapter(),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Custom Key Sources
+
+Configure which sources to check for API keys:
+
+```typescript
+ApiKeyModule.register({
+  headerName: 'x-api-key', // Custom header name
+  queryParamName: 'api_key', // Custom query param name
+  cookieName: 'api_key', // Custom cookie name
+});
+```
+
+---
+
+## API Reference
 
 ### ApiKeyService
 
@@ -360,12 +520,22 @@ console.log(`Revoked at: ${revokedKey.revokedAt}`);
 - `ApiKeyNotFoundException` if key doesn't exist
 - `ApiKeyAlreadyRevokedException` if key is already revoked
 
+#### `rotate(oldKeyId: string, options?: RotateOptions): Promise<CreateApiKeyResponse>`
+
+Rotates an API key by creating a new key and optionally revoking the old one.
+
+```typescript
+const newKey = await apiKeyService.rotate('old-key-id', {
+  revokeOldKey: true,
+  gracePeriodHours: 24, // Optional: grace period before revoking old key
+});
+```
+
 ### Decorators
 
 #### `@ApiKeyAuth()`
 
 Protects a route with API key authentication. The validated API key data is attached to `request.apiKey`.
-Automatically applies both `ApiKeyGuard` and `ScopesGuard` for scope checking.
 
 ```typescript
 @ApiKeyAuth()
@@ -378,8 +548,7 @@ findAll(@Req() req: Request) {
 
 #### `@Scopes(...scopes: string[])`
 
-Specifies required scopes for a route. Can be used with `@ApiKeyAuth()` to enforce fine-grained permissions.
-Multiple scopes are treated as AND (all required).
+Specifies required scopes for a route. Can be used with `@ApiKeyAuth()` to enforce fine-grained permissions. Multiple scopes are treated as AND (all required).
 
 ```typescript
 @ApiKeyAuth()
@@ -408,39 +577,45 @@ The library provides custom exceptions for better error handling:
 - `ApiKeyNotFoundException` - Thrown when an API key is not found
 - `ApiKeyAlreadyRevokedException` - Thrown when trying to revoke an already revoked key
 
-## 🗄️ Database Support
+---
+
+## Database Support
 
 The library is **database-agnostic** and works with **any database** through ORM adapters. You configure your database in your ORM, and the library works with it.
 
 ### Supported Databases
 
-#### Via Prisma Adapter
-- **PostgreSQL** ✅
-- **MySQL** ✅
-- **SQLite** ✅
-- **MongoDB** ✅
-- **SQL Server** ✅
-- **CockroachDB** ✅
+**Via Prisma Adapter:**
+
+- PostgreSQL
+- MySQL
+- SQLite
+- MongoDB
+- SQL Server
+- CockroachDB
 - And any database Prisma supports
 
-#### Via TypeORM Adapter
-- **PostgreSQL** ✅
-- **MySQL** ✅
-- **MariaDB** ✅
-- **SQLite** ✅
-- **SQL Server** ✅
-- **Oracle** ✅
-- **MongoDB** ✅ (with limitations)
+**Via TypeORM Adapter:**
+
+- PostgreSQL
+- MySQL
+- MariaDB
+- SQLite
+- SQL Server
+- Oracle
+- MongoDB (with limitations)
 - And any database TypeORM supports
 
-#### Via Mongoose Adapter
-- **MongoDB** ✅
+**Via Mongoose Adapter:**
+
+- MongoDB
 
 ### Database Configuration
 
 The library doesn't care which database you use - you configure it in your ORM:
 
 **Prisma Example (PostgreSQL):**
+
 ```prisma
 datasource db {
   provider = "postgresql"
@@ -449,6 +624,7 @@ datasource db {
 ```
 
 **Prisma Example (MySQL):**
+
 ```prisma
 datasource db {
   provider = "mysql"
@@ -457,6 +633,7 @@ datasource db {
 ```
 
 **Prisma Example (MongoDB):**
+
 ```prisma
 datasource db {
   provider = "mongodb"
@@ -467,8 +644,6 @@ datasource db {
 See [Database Configuration Examples](./examples/database-configs/) for complete examples for each database.
 
 ### Database Schema
-
-### Schema Structure
 
 The `ApiKey` table/collection contains:
 
@@ -500,77 +675,9 @@ npm run typeorm migration:run
 # Schema is automatically created on first use
 ```
 
-## 🔧 Advanced Configuration
+### ORM Setup Guides
 
-### Multiple Database Support
-
-The library supports **multiple databases** through ORM adapters. You can use any database that your chosen ORM supports:
-
-#### Prisma Adapter (Default)
-Supports:
-- **PostgreSQL** ✅
-- **MySQL** ✅
-- **SQLite** ✅
-- **SQL Server** ✅
-- **MongoDB** ✅
-- **CockroachDB** ✅
-- **PlanetScale** ✅
-
-Just change the `provider` in your `schema.prisma`:
-```prisma
-datasource db {
-  provider = "postgresql" // or "mysql", "sqlite", "mongodb", etc.
-}
-```
-
-#### TypeORM Adapter
-Supports:
-- **PostgreSQL** ✅
-- **MySQL** ✅
-- **MariaDB** ✅
-- **SQLite** ✅
-- **SQL Server** ✅
-- **Oracle** ✅
-- **CockroachDB** ✅
-
-Configure in your TypeORM connection options.
-
-#### Mongoose Adapter
-Supports:
-- **MongoDB** ✅
-
-Perfect for MongoDB-only applications.
-
-### Multiple ORM Support
-
-The library supports multiple ORMs through adapters:
-
-- **Prisma** (default) - Most popular, type-safe ORM, supports 7+ databases
-- **TypeORM** - Mature ORM with decorators, supports 6+ SQL databases
-- **Mongoose** - MongoDB ODM
-- **Custom** - Implement your own adapter for any database
-
-### Using Your Own PrismaClient
-
-If you already have a PrismaClient instance, you can inject it to avoid connection pool issues:
-
-```typescript
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
-@Module({
-  imports: [
-    ApiKeyModule.register({
-      adapter: 'prisma',
-      prismaClient: prisma, // Use existing instance
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-### TypeORM Setup
+**TypeORM Setup:**
 
 1. Create your entity:
 
@@ -626,7 +733,7 @@ export class ApiKeyEntity {
 export class AppModule {}
 ```
 
-### Mongoose Setup
+**Mongoose Setup:**
 
 1. Create your schema:
 
@@ -661,19 +768,287 @@ export const ApiKeySchema = new Schema({
 export class AppModule {}
 ```
 
-### Custom Key Sources
+---
 
-Configure which sources to check for API keys:
+## Advanced Features
+
+### Rate Limiting
+
+Per-key rate limiting with configurable limits:
 
 ```typescript
-ApiKeyModule.register({
-  headerName: 'x-api-key', // Custom header name
-  queryParamName: 'api_key', // Custom query param name
-  cookieName: 'api_key', // Custom cookie name
+const key = await apiKeyService.create({
+  name: 'My App',
+  rateLimitMax: 1000, // Max requests
+  rateLimitWindowMs: 60000, // Per minute
 });
 ```
 
-## 🧪 Testing
+### IP Whitelisting
+
+Restrict keys to specific IP addresses or CIDR ranges:
+
+```typescript
+const key = await apiKeyService.create({
+  name: 'My App',
+  ipWhitelist: ['192.168.1.0/24', '10.0.0.1'],
+});
+```
+
+### Audit Logging
+
+Comprehensive request logging for security and compliance:
+
+```typescript
+ApiKeyModule.register({
+  enableAuditLogging: true,
+  auditLogOptions: {
+    logToConsole: true,
+    logToDatabase: true, // Enable database storage
+    retentionDays: 90,
+  },
+});
+```
+
+**Query Audit Logs:**
+
+```typescript
+import { AuditLogService, AUDIT_LOG_SERVICE_TOKEN } from 'nest-api-key-auth';
+
+@Injectable()
+export class AuditService {
+  constructor(@Inject(AUDIT_LOG_SERVICE_TOKEN) private readonly auditLogService: AuditLogService) {}
+
+  async getKeyLogs(keyId: string) {
+    return await this.auditLogService.query({ keyId, limit: 100 });
+  }
+
+  async getStats() {
+    return await this.auditLogService.getStats();
+  }
+}
+```
+
+### Caching
+
+In-memory or Redis-based caching for improved performance:
+
+```typescript
+ApiKeyModule.register({
+  enableCaching: true,
+  cacheTtlMs: 300000, // 5 minutes
+});
+```
+
+### Redis Support
+
+For distributed systems with multiple instances, use Redis for rate limiting and caching:
+
+**Installation:**
+
+```bash
+npm install ioredis
+npm install -D @types/ioredis
+```
+
+**Configuration:**
+
+```typescript
+import Redis from 'ioredis';
+import { ApiKeyModule } from 'nest-api-key-auth';
+
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+});
+
+@Module({
+  imports: [
+    ApiKeyModule.register({
+      redisClient: redis,
+      enableRateLimiting: true,
+      enableCaching: true,
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+When `redisClient` is provided, the library automatically uses Redis for:
+
+- **Rate limiting**: Distributed rate limit tracking across all instances
+- **Caching**: Shared cache across all instances
+
+If Redis is unavailable, the library automatically falls back to in-memory implementations.
+
+### Usage Analytics
+
+Track API key usage and performance metrics:
+
+```typescript
+ApiKeyModule.register({
+  enableAnalytics: true,
+});
+```
+
+**Using Analytics Service:**
+
+```typescript
+import { AnalyticsService, ANALYTICS_SERVICE_TOKEN } from 'nest-api-key-auth';
+
+@Controller('analytics')
+export class AnalyticsController {
+  constructor(
+    @Inject(ANALYTICS_SERVICE_TOKEN) private readonly analyticsService: AnalyticsService,
+  ) {}
+
+  @Get('key/:keyId')
+  async getKeyMetrics(@Param('keyId') keyId: string) {
+    return await this.analyticsService.getKeyMetrics(keyId);
+  }
+
+  @Get('overview')
+  async getAnalytics() {
+    return await this.analyticsService.getAnalytics();
+  }
+}
+```
+
+**Metrics tracked:**
+
+- Request counts (total, success, failure)
+- Response times
+- Last used timestamps
+- Error rates
+- Top performing keys
+
+### Webhook Notifications
+
+Receive real-time notifications for API key events:
+
+**Configuration:**
+
+```typescript
+ApiKeyModule.register({
+  enableWebhooks: true,
+  webhooks: [
+    {
+      url: 'https://your-app.com/webhooks/api-keys',
+      secret: 'your-webhook-secret',
+      events: ['key.created', 'key.revoked', 'key.rotated', 'key.expired', 'key.expiring'],
+      retryAttempts: 3,
+      timeout: 5000,
+    },
+  ],
+});
+```
+
+**Supported Events:**
+
+- `key.created` - When a new API key is created
+- `key.revoked` - When an API key is revoked
+- `key.rotated` - When an API key is rotated
+- `key.expired` - When an API key expires
+- `key.expiring` - When an API key is about to expire (configurable thresholds)
+
+**Webhook Payload Format:**
+
+```json
+{
+  "event": "key.created",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "data": {
+    "keyId": "key-123",
+    "keyName": "My API Key",
+    "scopes": ["read:projects"],
+    "expiresAt": "2025-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Bulk Operations
+
+Create or revoke multiple API keys efficiently:
+
+```typescript
+import { BulkOperationsService } from 'nest-api-key-auth';
+
+@Injectable()
+export class KeyManagementService {
+  constructor(private readonly bulkOps: BulkOperationsService) {}
+
+  async createMultipleKeys(names: string[]) {
+    const result = await this.bulkOps.bulkCreate(
+      names.map((name) => ({ name, scopes: ['read:projects'] })),
+    );
+    return result;
+  }
+
+  async revokeMultipleKeys(keyIds: string[]) {
+    const result = await this.bulkOps.bulkRevoke(keyIds);
+    return result;
+  }
+}
+```
+
+### Expiration Monitoring
+
+Automatically monitor and notify about expiring API keys:
+
+```typescript
+import { ExpirationNotificationService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService implements OnModuleInit {
+  constructor(private readonly expirationService: ExpirationNotificationService) {}
+
+  onModuleInit() {
+    this.expirationService.startMonitoring();
+  }
+}
+```
+
+The service automatically:
+
+- Checks for expiring keys at configurable intervals (default: 24 hours)
+- Sends notifications when keys are about to expire (default: 30, 7, 1 days before)
+- Sends notifications when keys have expired
+- Integrates with webhook service if enabled
+
+---
+
+## Security
+
+**Hashing:**
+
+- API keys are hashed using bcrypt (default) or argon2 before storage
+- Choose your preferred hashing algorithm: `hashAlgorithm: 'bcrypt'` or `hashAlgorithm: 'argon2'`
+- Argon2 is recommended for new projects (winner of Password Hashing Competition)
+- Only the hashed version is stored in the database
+- Plaintext token is returned only once during creation
+
+**Key Management:**
+
+- Keys can be revoked at any time
+- Keys can have expiration dates
+- Last used timestamp tracking for security monitoring
+- Automatic expiration checking on validation
+
+**Validation:**
+
+- Token format validation (hexadecimal only)
+- Scope format validation (resource:action pattern)
+- Configuration validation at module initialization
+
+**Security Features:**
+
+- Rate limiting - Prevent abuse with per-key rate limits
+- IP whitelisting - Restrict access to specific IP addresses
+- Audit logging - Track all API key usage for security monitoring
+
+---
+
+## Testing
 
 The library includes a comprehensive test suite. Run tests with:
 
@@ -706,7 +1081,9 @@ if (await healthService.isHealthy()) {
 }
 ```
 
-## 📊 Logging
+---
+
+## Logging
 
 The library includes built-in logging for debugging and monitoring. Logs are automatically generated for:
 
@@ -725,291 +1102,52 @@ const logger = new Logger('MyApp');
 ApiKeyLogger.setLogger(logger);
 ```
 
-## ✅ Validation
+---
+
+## Validation
 
 ### Token Format
+
 Tokens must be hexadecimal strings (0-9, a-f). Invalid formats are rejected early.
 
 ### Scope Format
+
 Scopes must follow the `resource:action` pattern:
-- ✅ Valid: `read:projects`, `write:users`, `admin:*`
-- ❌ Invalid: `read`, `read-projects`, `read/projects`
+
+- Valid: `read:projects`, `write:users`, `admin:*`
+- Invalid: `read`, `read-projects`, `read/projects`
 
 ### Configuration
+
 Module options are validated at startup:
+
 - `secretLength`: Must be between 8 and 128
 - `headerName`, `queryParamName`, `cookieName`: Must be non-empty strings
 
-## 🛠️ CLI Tooling
+---
 
-The library includes a CLI tool for managing API keys (requires a running NestJS application):
+## Documentation
 
-```bash
-# Create a new API key
-npx nest-api-key create --name "My App" --scopes "read:projects,write:projects"
+Additional documentation and examples:
 
-# List all API keys
-npx nest-api-key list
+- [Migration Guide](./MIGRATION_GUIDE.md) - Migrate existing databases to support new features
+- [Database Configuration Examples](./examples/database-configs/) - Examples for PostgreSQL, MySQL, SQLite, MongoDB, etc.
+- [Code Examples](./examples/) - Code examples for all features
+- [Advanced Features Examples](./examples/advanced-features/) - Rate limiting, IP whitelisting, audit logging, caching
+- [Database Setup Examples](./examples/database-setup/) - PostgreSQL, MySQL, SQLite, MongoDB setup examples
 
-# Revoke an API key
-npx nest-api-key revoke <key-id>
+---
 
-# Rotate an API key
-npx nest-api-key rotate <key-id> --grace 24
-```
+## Contributing
 
-**Note:** The CLI tool currently provides guidance and code examples. Full implementation requires integration with your NestJS application's ApiKeyService.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 🔴 Redis Support
+---
 
-For distributed systems with multiple instances, use Redis for rate limiting and caching:
-
-### Installation
-
-```bash
-npm install ioredis
-npm install -D @types/ioredis
-```
-
-### Configuration
-
-```typescript
-import Redis from 'ioredis';
-import { ApiKeyModule } from 'nest-api-key-auth';
-
-const redis = new Redis({
-  host: 'localhost',
-  port: 6379,
-  // Add your Redis configuration
-});
-
-@Module({
-  imports: [
-    ApiKeyModule.register({
-      redisClient: redis, // Automatically uses Redis for rate limiting and caching
-      enableRateLimiting: true,
-      enableCaching: true,
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-When `redisClient` is provided, the library automatically uses Redis for:
-- **Rate limiting**: Distributed rate limit tracking across all instances
-- **Caching**: Shared cache across all instances
-
-If Redis is unavailable, the library automatically falls back to in-memory implementations.
-
-## 📊 Usage Analytics
-
-Track API key usage and performance metrics:
-
-### Enable Analytics
-
-```typescript
-ApiKeyModule.register({
-  enableAnalytics: true,
-})
-```
-
-### Using Analytics Service
-
-```typescript
-import { AnalyticsService, ANALYTICS_SERVICE_TOKEN } from 'nest-api-key-auth';
-import { Inject, Controller, Get, Param } from '@nestjs/common';
-
-@Controller('analytics')
-export class AnalyticsController {
-  constructor(
-    @Inject(ANALYTICS_SERVICE_TOKEN) private readonly analyticsService: AnalyticsService,
-  ) {}
-
-  @Get('key/:keyId')
-  async getKeyMetrics(@Param('keyId') keyId: string) {
-    return await this.analyticsService.getKeyMetrics(keyId);
-  }
-
-  @Get('overview')
-  async getAnalytics() {
-    return await this.analyticsService.getAnalytics();
-  }
-}
-```
-
-**Metrics tracked:**
-- Request counts (total, success, failure)
-- Response times
-- Last used timestamps
-- Error rates
-- Top performing keys
-
-## 🔔 Webhook Notifications
-
-Receive real-time notifications for API key events:
-
-### Configuration
-
-```typescript
-ApiKeyModule.register({
-  enableWebhooks: true,
-  webhooks: [
-    {
-      url: 'https://your-app.com/webhooks/api-keys',
-      secret: 'your-webhook-secret',
-      events: ['key.created', 'key.revoked', 'key.rotated', 'key.expired', 'key.expiring'],
-      retryAttempts: 3,
-      timeout: 5000,
-    },
-  ],
-})
-```
-
-### Supported Events
-
-- `key.created` - When a new API key is created
-- `key.revoked` - When an API key is revoked
-- `key.rotated` - When an API key is rotated
-- `key.expired` - When an API key expires
-- `key.expiring` - When an API key is about to expire (configurable thresholds)
-
-### Webhook Payload Format
-
-```json
-{
-  "event": "key.created",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "data": {
-    "keyId": "key-123",
-    "keyName": "My API Key",
-    "scopes": ["read:projects"],
-    "expiresAt": "2025-01-01T00:00:00.000Z"
-  }
-}
-```
-
-### Webhook Endpoint Example
-
-```typescript
-@Controller('webhooks')
-export class WebhookController {
-  @Post('api-keys')
-  async handleWebhook(@Req() req: Request) {
-    const secret = req.headers['x-webhook-secret'];
-    if (secret !== 'your-webhook-secret') {
-      throw new UnauthorizedException('Invalid webhook secret');
-    }
-
-    const payload = req.body;
-    console.log('Webhook event:', payload.event);
-    console.log('Data:', payload.data);
-
-    // Handle the event
-    switch (payload.event) {
-      case 'key.created':
-        // Notify your team, update dashboard, etc.
-        break;
-      case 'key.revoked':
-        // Log security event, update access lists, etc.
-        break;
-    }
-  }
-}
-```
-
-## 📦 Bulk Operations
-
-Create or revoke multiple API keys efficiently:
-
-```typescript
-import { BulkOperationsService } from 'nest-api-key-auth';
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class KeyManagementService {
-  constructor(private readonly bulkOps: BulkOperationsService) {}
-
-  async createMultipleKeys(names: string[]) {
-    const result = await this.bulkOps.bulkCreate(
-      names.map((name) => ({ name, scopes: ['read:projects'] })),
-    );
-
-    console.log(`Created ${result.success} keys, ${result.failed} failed`);
-    result.results.forEach((r) => {
-      if (r.success) {
-        console.log(`✓ ${r.name}: ${r.keyId}`);
-      } else {
-        console.log(`✗ ${r.name}: ${r.error}`);
-      }
-    });
-
-    return result;
-  }
-
-  async revokeMultipleKeys(keyIds: string[]) {
-    const result = await this.bulkOps.bulkRevoke(keyIds);
-    console.log(`Revoked ${result.success} keys, ${result.failed} failed`);
-    return result;
-  }
-}
-```
-
-## ⏰ Expiration Monitoring
-
-Automatically monitor and notify about expiring API keys:
-
-### Enable Monitoring
-
-```typescript
-import { ExpirationNotificationService } from 'nest-api-key-auth';
-import { Injectable, OnModuleInit } from '@nestjs/common';
-
-@Injectable()
-export class AppService implements OnModuleInit {
-  constructor(
-    private readonly expirationService: ExpirationNotificationService,
-  ) {}
-
-  onModuleInit() {
-    // Start monitoring (checks every 24 hours by default)
-    this.expirationService.startMonitoring();
-  }
-
-  async getKeysExpiringSoon(days: number) {
-    return await this.expirationService.getKeysExpiringSoon(days);
-  }
-}
-```
-
-The service automatically:
-- Checks for expiring keys at configurable intervals (default: 24 hours)
-- Sends notifications when keys are about to expire (default: 30, 7, 1 days before)
-- Sends notifications when keys have expired
-- Integrates with webhook service if enabled
-
-### Custom Configuration
-
-```typescript
-// In your module factory
-const expirationService = new ExpirationNotificationService(
-  adapter,
-  webhookService,
-  {
-    checkIntervalMs: 12 * 60 * 60 * 1000, // Check every 12 hours
-    warningDaysBeforeExpiration: [30, 14, 7, 1], // Custom warning thresholds
-    enableWebhooks: true,
-  },
-);
-```
-
-## 👤 Author
-
-**Mohammad Shariq**
-
-## 📄 License
+## License
 
 MIT
 
 ---
 
-**Note:** This library is under active development and is not yet ready for production use. The API may change in future versions. Please report any issues or suggestions.
+**Author:** Mohammad Shariq

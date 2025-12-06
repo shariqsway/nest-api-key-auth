@@ -3,10 +3,16 @@
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 const { Command } = require('commander');
 const readline = require('readline');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { CliService } = require('./cli-service');
 
 const program = new Command();
 
-program.name('nest-api-key').description('CLI tool for managing API keys').version('0.1.0');
+program.name('nest-api-key').description('CLI tool for managing API keys').version('0.1.3');
+
+async function getDatabaseUrl(): Promise<string | undefined> {
+  return process.env.DATABASE_URL;
+}
 
 program
   .command('create')
@@ -15,94 +21,211 @@ program
   .option('-s, --scopes <scopes>', 'Comma-separated scopes (e.g., read:projects,write:projects)')
   .option('-e, --expires <date>', 'Expiration date (YYYY-MM-DD)')
   .option('-i, --ip <ips>', 'Comma-separated IP whitelist')
-  .option('-r, --rate-limit <number>', 'Rate limit max requests')
-  .option('-w, --window <ms>', 'Rate limit window in milliseconds')
+  .option('-r, --rate-limit <number>', 'Rate limit max requests', parseInt)
+  .option('-w, --window <ms>', 'Rate limit window in milliseconds', parseInt)
+  .option('--db-url <url>', 'Database URL (or set DATABASE_URL env var)')
   .action(async (options) => {
-    console.log('Creating API key...');
-    console.log('Options:', options);
+    try {
+      const dbUrl = options.dbUrl || (await getDatabaseUrl());
+      if (!dbUrl) {
+        console.error('❌ Error: Database URL is required.');
+        console.error('   Set DATABASE_URL environment variable or use --db-url option.');
+        process.exit(1);
+      }
 
-    if (!options.name) {
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
+      const cliService = new CliService({ databaseUrl: dbUrl });
+      await cliService.initialize();
 
-      const name = await new Promise<string>((resolve) => {
-        rl.question('Enter API key name: ', (answer: string) => {
-          rl.close();
-          resolve(answer);
+      let name = options.name;
+      if (!name) {
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
         });
+
+        name = await new Promise<string>((resolve) => {
+          rl.question('Enter API key name: ', (answer: string) => {
+            rl.close();
+            resolve(answer);
+          });
+        });
+      }
+
+      const scopes = options.scopes
+        ? options.scopes.split(',').map((s: string) => s.trim())
+        : undefined;
+      const expiresAt = options.expires ? new Date(options.expires) : undefined;
+      const ipWhitelist = options.ip
+        ? options.ip.split(',').map((ip: string) => ip.trim())
+        : undefined;
+
+      const result = await cliService.createKey({
+        name,
+        scopes,
+        expiresAt,
+        ipWhitelist,
+        rateLimitMax: options.rateLimit,
+        rateLimitWindowMs: options.window,
       });
 
-      options.name = name;
+      console.log('\n✅ API Key created successfully!');
+      console.log(`\nID: ${result.id}`);
+      console.log(`Name: ${result.name}`);
+      console.log(`Token: ${result.token}`);
+      console.log(`\n⚠️  IMPORTANT: Store this token securely. It will not be shown again!`);
+      if (result.scopes.length > 0) {
+        console.log(`Scopes: ${result.scopes.join(', ')}`);
+      }
+      if (result.expiresAt) {
+        console.log(`Expires: ${result.expiresAt.toISOString().split('T')[0]}`);
+      }
+
+      await cliService.disconnect();
+    } catch (error) {
+      console.error(
+        '❌ Error creating API key:',
+        error instanceof Error ? error.message : String(error),
+      );
+      process.exit(1);
     }
-
-    console.log('\n⚠️  Note: This CLI tool requires a running NestJS application.');
-    console.log('For now, use the ApiKeyService in your application code.');
-    console.log('\nExample:');
-    console.log(`
-import { ApiKeyService } from 'nest-api-key-auth';
-
-const key = await apiKeyService.create({
-  name: '${options.name}',
-  ${
-    options.scopes
-      ? `scopes: [${options.scopes
-          .split(',')
-          .map((s: string) => `'${s.trim()}'`)
-          .join(', ')}],`
-      : ''
-  }
-  ${options.expires ? `expiresAt: new Date('${options.expires}'),` : ''}
-  ${
-    options.ip
-      ? `ipWhitelist: [${options.ip
-          .split(',')
-          .map((ip: string) => `'${ip.trim()}'`)
-          .join(', ')}],`
-      : ''
-  }
-  ${options.rateLimit ? `rateLimitMax: ${options.rateLimit},` : ''}
-  ${options.window ? `rateLimitWindowMs: ${options.window},` : ''}
-});
-
-console.log('API Key:', key.token);
-    `);
   });
 
 program
   .command('list')
   .description('List all API keys')
   .option('-a, --all', 'Show all keys including revoked')
-  .action((options) => {
-    console.log('Listing API keys...');
-    console.log('Options:', options);
-    console.log('\n⚠️  Note: This CLI tool requires a running NestJS application.');
-    console.log('Use ApiKeyService.findAll() or ApiKeyService.findAllActive() in your code.');
+  .option('--db-url <url>', 'Database URL (or set DATABASE_URL env var)')
+  .action(async (options) => {
+    try {
+      const dbUrl = options.dbUrl || (await getDatabaseUrl());
+      if (!dbUrl) {
+        console.error('❌ Error: Database URL is required.');
+        console.error('   Set DATABASE_URL environment variable or use --db-url option.');
+        process.exit(1);
+      }
+
+      const cliService = new CliService({ databaseUrl: dbUrl });
+      await cliService.initialize();
+
+      const keys = await cliService.listKeys(options.all);
+
+      if (keys.length === 0) {
+        console.log('No API keys found.');
+      } else {
+        console.log(`\nFound ${keys.length} API key(s):\n`);
+        keys.forEach((key) => {
+          const status = key.revokedAt
+            ? '❌ REVOKED'
+            : key.expiresAt && key.expiresAt < new Date()
+              ? '⏰ EXPIRED'
+              : '✅ ACTIVE';
+          console.log(`${status} ${key.id}`);
+          console.log(`   Name: ${key.name}`);
+          if (key.scopes.length > 0) {
+            console.log(`   Scopes: ${key.scopes.join(', ')}`);
+          }
+          console.log(`   Created: ${key.createdAt.toISOString().split('T')[0]}`);
+          if (key.expiresAt) {
+            console.log(`   Expires: ${key.expiresAt.toISOString().split('T')[0]}`);
+          }
+          if (key.lastUsedAt) {
+            console.log(`   Last used: ${key.lastUsedAt.toISOString().split('T')[0]}`);
+          }
+          if (key.revokedAt) {
+            console.log(`   Revoked: ${key.revokedAt.toISOString().split('T')[0]}`);
+          }
+          console.log('');
+        });
+      }
+
+      await cliService.disconnect();
+    } catch (error) {
+      console.error(
+        '❌ Error listing API keys:',
+        error instanceof Error ? error.message : String(error),
+      );
+      process.exit(1);
+    }
   });
 
 program
   .command('revoke')
   .description('Revoke an API key')
   .argument('<id>', 'API key ID')
-  .action((id) => {
-    console.log(`Revoking API key: ${id}`);
-    console.log('\n⚠️  Note: This CLI tool requires a running NestJS application.');
-    console.log(`Use apiKeyService.revoke('${id}') in your code.`);
+  .option('--db-url <url>', 'Database URL (or set DATABASE_URL env var)')
+  .action(async (id, options) => {
+    try {
+      const dbUrl = options.dbUrl || (await getDatabaseUrl());
+      if (!dbUrl) {
+        console.error('❌ Error: Database URL is required.');
+        console.error('   Set DATABASE_URL environment variable or use --db-url option.');
+        process.exit(1);
+      }
+
+      const cliService = new CliService({ databaseUrl: dbUrl });
+      await cliService.initialize();
+
+      const result = await cliService.revokeKey(id);
+
+      console.log(`\n✅ API key revoked successfully!`);
+      console.log(`ID: ${result.id}`);
+      console.log(`Name: ${result.name}`);
+      console.log(`Revoked at: ${result.revokedAt.toISOString()}`);
+
+      await cliService.disconnect();
+    } catch (error) {
+      console.error(
+        '❌ Error revoking API key:',
+        error instanceof Error ? error.message : String(error),
+      );
+      process.exit(1);
+    }
   });
 
 program
   .command('rotate')
-  .description('Rotate an API key')
+  .description('Rotate an API key (create new key and optionally revoke old one)')
   .argument('<id>', 'API key ID')
-  .option('-g, --grace <hours>', 'Grace period in hours')
-  .action((id, options) => {
-    console.log(`Rotating API key: ${id}`);
-    console.log('Options:', options);
-    console.log('\n⚠️  Note: This CLI tool requires a running NestJS application.');
-    console.log(
-      `Use apiKeyService.rotate('${id}', { revokeOldKey: true, gracePeriodHours: ${options.grace || 24} }) in your code.`,
-    );
+  .option('-g, --grace <hours>', 'Grace period in hours before revoking old key', parseInt)
+  .option('--revoke-old', 'Immediately revoke old key (no grace period)')
+  .option('--db-url <url>', 'Database URL (or set DATABASE_URL env var)')
+  .action(async (id, options) => {
+    try {
+      const dbUrl = options.dbUrl || (await getDatabaseUrl());
+      if (!dbUrl) {
+        console.error('❌ Error: Database URL is required.');
+        console.error('   Set DATABASE_URL environment variable or use --db-url option.');
+        process.exit(1);
+      }
+
+      const cliService = new CliService({ databaseUrl: dbUrl });
+      await cliService.initialize();
+
+      const result = await cliService.rotateKey(id, {
+        revokeOldKey: options.revokeOld || false,
+        gracePeriodHours: options.grace,
+      });
+
+      console.log(`\n✅ API key rotated successfully!`);
+      console.log(`\nNew Key:`);
+      console.log(`  ID: ${result.id}`);
+      console.log(`  Name: ${result.name}`);
+      console.log(`  Token: ${result.token}`);
+      console.log(`\n⚠️  IMPORTANT: Store this token securely. It will not be shown again!`);
+      if (options.revokeOld) {
+        console.log(`\nOld key ${id} has been revoked.`);
+      } else if (options.grace) {
+        console.log(`\nOld key ${id} will be revoked after ${options.grace} hours.`);
+      }
+
+      await cliService.disconnect();
+    } catch (error) {
+      console.error(
+        '❌ Error rotating API key:',
+        error instanceof Error ? error.message : String(error),
+      );
+      process.exit(1);
+    }
   });
 
 program.parse();

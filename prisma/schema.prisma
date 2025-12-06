@@ -1,12 +1,9 @@
-// This is your Prisma schema file for API Key authentication
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" // Change to your database provider (postgresql, mysql, sqlite, etc.)
-  // URL is provided via DATABASE_URL environment variable (Prisma 7 requirement)
+  provider = "postgresql"
 }
 
 model ApiKey {
@@ -24,9 +21,33 @@ model ApiKey {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  auditLogs        AuditLog[]
+
   @@unique([keyPrefix, hashedKey])
   @@index([keyPrefix])
   @@index([expiresAt])
   @@map("api_keys")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  keyId       String
+  keyName     String?
+  ipAddress   String
+  method      String
+  path        String
+  statusCode  Int?
+  success     Boolean
+  errorMessage String? @db.Text
+  requestId   String?
+  timestamp   DateTime @default(now())
+
+  apiKey      ApiKey?  @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@index([keyId])
+  @@index([timestamp])
+  @@index([success])
+  @@index([ipAddress])
+  @@map("audit_logs")
 }
 

@@ -38,9 +38,14 @@ describe('API Key Flow Integration Tests', () => {
     module = await Test.createTestingModule({
       imports: [
         ApiKeyModule.register({
+          adapter: 'custom',
+          customAdapter: mockAdapter,
           enableRateLimiting: true,
           enableAuditLogging: true,
           enableCaching: true,
+          auditLogOptions: {
+            logToDatabase: false, // Disable database logging in tests
+          },
         }),
       ],
     })
