@@ -1,6 +1,6 @@
 {
   "name": "nest-api-key-auth",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A NestJS module for API key-based authentication with built-in security, scopes, and multiple database adapters",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
