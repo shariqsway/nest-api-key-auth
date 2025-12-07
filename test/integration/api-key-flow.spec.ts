@@ -33,6 +33,8 @@ describe('API Key Flow Integration Tests', () => {
       findAllActive: jest.fn(),
       revoke: jest.fn(),
       updateLastUsed: jest.fn(),
+      updateQuotaUsage: jest.fn(),
+      query: jest.fn(),
     };
 
     module = await Test.createTestingModule({

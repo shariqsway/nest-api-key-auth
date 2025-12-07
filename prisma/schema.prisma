@@ -18,6 +18,15 @@ model ApiKey {
   ipWhitelist      String[] @default([])
   rateLimitMax     Int?
   rateLimitWindowMs Int?
+  quotaMax         Int?                       // Usage quota maximum
+  quotaPeriod      String?                   // 'daily' | 'monthly' | 'yearly'
+  quotaUsed        Int       @default(0)     // Current usage count
+  quotaResetAt     DateTime?                 // When quota resets
+  metadata         Json?                     // Custom metadata JSON
+  tags             String[] @default([])     // Tags for organization
+  owner            String?                   // Owner/creator identifier
+  environment      String?                   // 'production' | 'staging' | 'development'
+  description      String? @db.Text          // Optional description
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -26,6 +35,9 @@ model ApiKey {
   @@unique([keyPrefix, hashedKey])
   @@index([keyPrefix])
   @@index([expiresAt])
+  @@index([tags])
+  @@index([owner])
+  @@index([environment])
   @@map("api_keys")
 }
 

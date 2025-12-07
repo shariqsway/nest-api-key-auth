@@ -10,6 +10,15 @@ export interface ApiKey {
   ipWhitelist?: string[];
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
+  quotaMax?: number | null;
+  quotaPeriod?: 'daily' | 'monthly' | 'yearly' | null;
+  quotaUsed?: number;
+  quotaResetAt?: Date | null;
+  metadata?: Record<string, unknown> | null;
+  tags?: string[];
+  owner?: string | null;
+  environment?: 'production' | 'staging' | 'development' | null;
+  description?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +30,13 @@ export interface CreateApiKeyDto {
   ipWhitelist?: string[];
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
+  quotaMax?: number;
+  quotaPeriod?: 'daily' | 'monthly' | 'yearly';
+  metadata?: Record<string, unknown>;
+  tags?: string[];
+  owner?: string;
+  environment?: 'production' | 'staging' | 'development';
+  description?: string;
 }
 
 export interface CreateApiKeyResponse {

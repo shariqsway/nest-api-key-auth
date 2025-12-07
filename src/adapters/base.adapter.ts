@@ -20,6 +20,13 @@ export interface IApiKeyAdapter {
     ipWhitelist?: string[];
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
+    quotaMax?: number | null;
+    quotaPeriod?: 'daily' | 'monthly' | 'yearly' | null;
+    metadata?: Record<string, unknown> | null;
+    tags?: string[];
+    owner?: string | null;
+    environment?: 'production' | 'staging' | 'development' | null;
+    description?: string | null;
   }): Promise<ApiKey>;
 
   /**
@@ -67,4 +74,34 @@ export interface IApiKeyAdapter {
    * @returns The updated API key
    */
   updateLastUsed(id: string): Promise<ApiKey>;
+
+  /**
+   * Updates the quota usage for an API key.
+   *
+   * @param id - The API key ID
+   * @param quotaUsed - New quota used value
+   * @param quotaResetAt - When quota resets
+   * @returns The updated API key
+   */
+  updateQuotaUsage(id: string, quotaUsed: number, quotaResetAt: Date): Promise<ApiKey>;
+
+  /**
+   * Queries API keys with advanced filters.
+   *
+   * @param filters - Query filters
+   * @returns Array of matching API keys
+   */
+  query(filters: {
+    tags?: string[];
+    owner?: string;
+    environment?: 'production' | 'staging' | 'development';
+    scopes?: string[];
+    active?: boolean;
+    createdAfter?: Date;
+    createdBefore?: Date;
+    lastUsedAfter?: Date;
+    lastUsedBefore?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiKey[]>;
 }

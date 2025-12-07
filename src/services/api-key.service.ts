@@ -67,6 +67,13 @@ export class ApiKeyService {
         ipWhitelist: dto.ipWhitelist || [],
         rateLimitMax: dto.rateLimitMax || null,
         rateLimitWindowMs: dto.rateLimitWindowMs || null,
+        quotaMax: dto.quotaMax || null,
+        quotaPeriod: dto.quotaPeriod || null,
+        metadata: dto.metadata || null,
+        tags: dto.tags || [],
+        owner: dto.owner || null,
+        environment: dto.environment || null,
+        description: dto.description || null,
       });
 
       if (this.cacheService) {

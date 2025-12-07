@@ -7,9 +7,9 @@
 [![GitHub license](https://img.shields.io/github/license/shariqsway/nest-api-key-auth.svg)](https://github.com/shariqsway/nest-api-key-auth/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 
-A production-ready NestJS module for API key-based authentication with built-in security, scopes, and multiple database adapters.
+A comprehensive NestJS module for API key-based authentication with built-in security, scopes, and multiple database adapters.
 
-> **Production Ready:** This library is production-ready and actively maintained. The API is stable, and all core features are fully implemented and tested.
+> **Development Status:** This library is **actively being developed** and is **NOT ready for production use**. While many features are implemented, extensive testing, security audits, and performance optimization are still required. The API may change in future versions.
 
 ---
 
@@ -39,6 +39,7 @@ A production-ready NestJS module for API key-based authentication with built-in 
   - [ORM Setup Guides](#orm-setup-guides)
 - [Advanced Features](#advanced-features)
   - [Rate Limiting](#rate-limiting)
+  - [Usage Quotas](#usage-quotas)
   - [IP Whitelisting](#ip-whitelisting)
   - [Audit Logging](#audit-logging)
   - [Caching](#caching)
@@ -47,6 +48,12 @@ A production-ready NestJS module for API key-based authentication with built-in 
   - [Webhook Notifications](#webhook-notifications)
   - [Bulk Operations](#bulk-operations)
   - [Expiration Monitoring](#expiration-monitoring)
+  - [Key Metadata](#key-metadata)
+  - [Automated Rotation Policies](#automated-rotation-policies)
+  - [Advanced Filtering and Querying](#advanced-filtering-and-querying)
+  - [Export/Import Functionality](#exportimport-functionality)
+  - [Request Signing (HMAC)](#request-signing-hmac)
+  - [Key Templates](#key-templates)
 - [Security](#security)
 - [Testing](#testing)
 - [Logging](#logging)
@@ -64,11 +71,11 @@ A production-ready NestJS module for API key-based authentication with built-in 
 **Key Benefits:**
 
 - Zero boilerplate - Get started in minutes
-- Production-ready with comprehensive testing
 - Database-agnostic - Works with any database through ORM adapters
 - Type-safe - Full TypeScript support
 - Secure by default - Built-in hashing, validation, and security features
 - Highly configurable - Customize every aspect of the authentication flow
+- Comprehensive feature set - Rate limiting, quotas, analytics, webhooks, and more
 
 ---
 
@@ -87,6 +94,7 @@ A production-ready NestJS module for API key-based authentication with built-in 
 **Advanced Features:**
 
 - Rate limiting - Per-key rate limiting with configurable limits
+- Usage quotas - Per-key usage limits (daily, monthly, yearly) with automatic reset
 - Redis support - Distributed rate limiting and caching with Redis (with in-memory fallback)
 - IP whitelisting - Restrict keys to specific IP addresses or CIDR ranges
 - Audit logging - Comprehensive request logging for security and compliance (with database storage)
@@ -97,6 +105,12 @@ A production-ready NestJS module for API key-based authentication with built-in 
 - Expiration monitoring - Automatic monitoring and notifications for expiring keys
 - CLI tool - Command-line interface for managing API keys directly from terminal
 - Database audit logging - Store audit logs in database with query and analytics capabilities
+- Key metadata - Store custom metadata, tags, owner, environment, and descriptions for better organization
+- Automated rotation policies - Schedule and automate API key rotations based on policies
+- Advanced filtering - Query API keys by tags, owner, environment, scopes, and more
+- Export/Import - Export key configurations and import metadata for backup and migration
+- Request signing (HMAC) - Support for HMAC signature verification for enhanced security
+- Key templates - Define reusable API key configurations and presets
 
 **Developer Experience:**
 
@@ -464,6 +478,13 @@ const key = await apiKeyService.create({
   ipWhitelist: ['192.168.1.0/24'], // Optional: IP restrictions
   rateLimitMax: 1000, // Optional: max requests per window
   rateLimitWindowMs: 60000, // Optional: time window in milliseconds
+  quotaMax: 10000, // Optional: maximum requests per quota period
+  quotaPeriod: 'daily', // Optional: 'daily', 'monthly', or 'yearly'
+  metadata: { appVersion: '1.0.0', region: 'us-east-1' }, // Optional: custom metadata
+  tags: ['production', 'api-v2'], // Optional: tags for organization
+  owner: 'team-backend', // Optional: owner identifier
+  environment: 'production', // Optional: 'production', 'staging', or 'development'
+  description: 'API key for production mobile app', // Optional: description
 });
 
 console.log(key.token); // Store this securely!
@@ -658,6 +679,15 @@ The `ApiKey` table/collection contains:
 - `ipWhitelist`: Array of allowed IP addresses
 - `rateLimitMax`: Maximum requests per window
 - `rateLimitWindowMs`: Rate limit window in milliseconds
+- `quotaMax`: Maximum requests allowed within a quota period (null if no quota)
+- `quotaPeriod`: Quota period - 'daily', 'monthly', or 'yearly' (null if no quota)
+- `quotaUsed`: Number of requests used in current quota period
+- `quotaResetAt`: Timestamp when quota resets
+- `metadata`: Custom metadata as JSON object (null if none)
+- `tags`: Array of tags for organization
+- `owner`: Owner identifier (null if none)
+- `environment`: Environment - 'production', 'staging', or 'development' (null if none)
+- `description`: Description of the API key (null if none)
 - `createdAt`: Creation timestamp
 - `updatedAt`: Last update timestamp
 
@@ -881,6 +911,53 @@ When `redisClient` is provided, the library automatically uses Redis for:
 
 If Redis is unavailable, the library automatically falls back to in-memory implementations.
 
+### Usage Quotas
+
+Enforce usage quotas per API key with automatic reset:
+
+```typescript
+import { QuotaService, QUOTA_SERVICE_TOKEN } from 'nest-api-key-auth';
+import { Inject } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+  constructor(@Inject(QUOTA_SERVICE_TOKEN) private readonly quotaService: QuotaService) {}
+
+  async checkQuota(keyId: string) {
+    const status = await this.quotaService.getQuotaStatus(keyId);
+    if (status && !status.allowed) {
+      throw new Error(`Quota exceeded: ${status.used}/${status.limit}`);
+    }
+  }
+}
+```
+
+**Create API key with quota:**
+
+```typescript
+const key = await apiKeyService.create({
+  name: 'Limited API Key',
+  quotaMax: 10000, // Maximum requests
+  quotaPeriod: 'daily', // Reset daily ('daily', 'monthly', or 'yearly')
+});
+```
+
+**Enable quota limiting in module:**
+
+```typescript
+ApiKeyModule.register({
+  enableQuotaLimiting: true,
+  // ... other options
+});
+```
+
+The quota service automatically:
+
+- Tracks usage per API key
+- Resets quotas at the end of each period (daily, monthly, yearly)
+- Supports Redis for distributed quota tracking
+- Falls back to in-memory tracking if Redis is unavailable
+
 ### Usage Analytics
 
 Track API key usage and performance metrics:
@@ -1014,6 +1091,248 @@ The service automatically:
 - Sends notifications when keys are about to expire (default: 30, 7, 1 days before)
 - Sends notifications when keys have expired
 - Integrates with webhook service if enabled
+
+### Usage Quotas
+
+Enforce usage quotas per API key with automatic reset:
+
+```typescript
+import { QuotaService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly quotaService: QuotaService) {}
+
+  async checkQuota(keyId: string) {
+    const status = await this.quotaService.getQuotaStatus(keyId);
+    if (status && !status.allowed) {
+      throw new Error(`Quota exceeded: ${status.used}/${status.limit}`);
+    }
+  }
+}
+```
+
+**Create API key with quota:**
+
+```typescript
+const key = await apiKeyService.create({
+  name: 'Limited API Key',
+  quotaMax: 10000, // Maximum requests
+  quotaPeriod: 'daily', // Reset daily
+});
+```
+
+### Key Metadata
+
+Store custom metadata and organizational information with API keys:
+
+```typescript
+const key = await apiKeyService.create({
+  name: 'Production API Key',
+  metadata: {
+    appVersion: '2.0.0',
+    region: 'us-east-1',
+    deploymentId: 'deploy-123',
+  },
+  tags: ['production', 'api-v2', 'mobile'],
+  owner: 'team-backend',
+  environment: 'production',
+  description: 'API key for production mobile application',
+});
+```
+
+**Query keys by metadata (using adapter directly):**
+
+```typescript
+import { IApiKeyAdapter, API_KEY_ADAPTER } from 'nest-api-key-auth';
+import { Inject } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+  constructor(@Inject(API_KEY_ADAPTER) private readonly adapter: IApiKeyAdapter) {}
+
+  async queryKeys() {
+    const keys = await this.adapter.query({
+      tags: ['production'],
+      owner: 'team-backend',
+      environment: 'production',
+    });
+    return keys;
+  }
+}
+```
+
+### Automated Rotation Policies
+
+Schedule and automate API key rotations:
+
+```typescript
+import { RotationPolicyService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService implements OnModuleInit {
+  constructor(private readonly rotationService: RotationPolicyService) {}
+
+  async onModuleInit() {
+    // Register a rotation policy
+    this.rotationService.registerPolicy({
+      id: 'monthly-rotation',
+      name: 'Monthly Key Rotation',
+      rotationIntervalDays: 30,
+      revokeOldKey: true,
+      gracePeriodHours: 24,
+      enabled: true,
+      nextRunAt: new Date(),
+    });
+  }
+}
+```
+
+**Policy-based rotation:**
+
+```typescript
+// Rotate keys matching specific criteria
+this.rotationService.registerPolicy({
+  id: 'production-rotation',
+  name: 'Production Keys Rotation',
+  tags: ['production'],
+  owner: 'team-backend',
+  rotationIntervalDays: 90,
+  revokeOldKey: true,
+  enabled: true,
+  nextRunAt: new Date(),
+});
+```
+
+### Advanced Filtering and Querying
+
+Query API keys with advanced filters using the adapter:
+
+```typescript
+import { IApiKeyAdapter, API_KEY_ADAPTER } from 'nest-api-key-auth';
+import { Inject } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+  constructor(@Inject(API_KEY_ADAPTER) private readonly adapter: IApiKeyAdapter) {}
+
+  async queryKeys() {
+    // Query by multiple criteria
+    const keys = await this.adapter.query({
+      tags: ['production', 'api-v2'],
+      owner: 'team-backend',
+      environment: 'production',
+      scopes: ['read:projects'],
+      active: true,
+      createdAfter: new Date('2024-01-01'),
+      limit: 50,
+      offset: 0,
+    });
+    return keys;
+  }
+}
+```
+
+### Export/Import Functionality
+
+Export and import API key configurations:
+
+```typescript
+import { ExportImportService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly exportService: ExportImportService) {}
+
+  async exportKeys() {
+    const json = await this.exportService.exportKeys({
+      includeRevoked: false,
+      format: 'json',
+      filters: {
+        tags: ['production'],
+        environment: 'production',
+      },
+    });
+    // Save to file or send to backup service
+    return json;
+  }
+
+  async importKeys(jsonData: string) {
+    const result = await this.exportService.importKeys(jsonData);
+    console.log(`Imported: ${result.success}, Failed: ${result.failed}`);
+  }
+}
+```
+
+### Request Signing (HMAC)
+
+Verify HMAC signatures for enhanced security:
+
+```typescript
+import { RequestSigningService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly signingService: RequestSigningService) {}
+
+  verifyRequest(secret: string, payload: string, signature: string, timestamp: number) {
+    return this.signingService.verifyRequest(secret, payload, signature, timestamp, {
+      algorithm: 'sha256',
+      timestampToleranceMs: 300000, // 5 minutes
+    });
+  }
+}
+```
+
+**Sign a request:**
+
+```typescript
+const signed = this.signingService.signRequest(apiKeyToken, `${method}${path}${body}`, Date.now());
+// Include signature and timestamp in headers
+headers['x-signature'] = signed.signature;
+headers['x-timestamp'] = signed.timestamp.toString();
+```
+
+### Key Templates
+
+Define reusable API key configurations:
+
+```typescript
+import { KeyTemplateService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService implements OnModuleInit {
+  constructor(
+    private readonly templateService: KeyTemplateService,
+    private readonly apiKeyService: ApiKeyService,
+  ) {}
+
+  async onModuleInit() {
+    // Register a template
+    this.templateService.registerTemplate({
+      id: 'production-template',
+      name: 'Production API Key Template',
+      description: 'Standard production key configuration',
+      config: {
+        scopes: ['read:projects', 'write:projects'],
+        quotaMax: 100000,
+        quotaPeriod: 'monthly',
+        environment: 'production',
+        tags: ['production'],
+        rateLimitMax: 1000,
+        rateLimitWindowMs: 60000,
+      },
+    });
+  }
+
+  async createFromTemplate(name: string) {
+    const dto = this.templateService.createFromTemplate('production-template', name, {
+      owner: 'team-backend', // Override template value
+    });
+    return await this.apiKeyService.create(dto);
+  }
+}
+```
 
 ---
 

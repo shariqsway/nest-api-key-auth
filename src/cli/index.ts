@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 
-/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
-const { Command } = require('commander');
-const readline = require('readline');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { CliService } = require('./cli-service');
+import { Command } from 'commander';
+import * as readline from 'readline';
+import { CliService } from './cli-service';
 
 const program = new Command();
 

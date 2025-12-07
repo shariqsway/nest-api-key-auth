@@ -22,6 +22,11 @@ import { AnalyticsService } from './services/analytics.service';
 import { WebhookService } from './services/webhook.service';
 import { BulkOperationsService } from './services/bulk-operations.service';
 import { ExpirationNotificationService } from './services/expiration-notification.service';
+import { QuotaService } from './services/quota.service';
+import { RotationPolicyService } from './services/rotation-policy.service';
+import { KeyTemplateService } from './services/key-template.service';
+import { ExportImportService } from './services/export-import.service';
+import { RequestSigningService } from './services/request-signing.service';
 import { RedisClient } from './types/redis.types';
 import { PrismaAuditLogAdapter } from './adapters/prisma-audit-log.adapter';
 import {
@@ -42,6 +47,8 @@ export const RATE_LIMIT_SERVICE_TOKEN = 'RATE_LIMIT_SERVICE';
 export const AUDIT_LOG_SERVICE_TOKEN = 'AUDIT_LOG_SERVICE';
 export const ANALYTICS_SERVICE_TOKEN = 'ANALYTICS_SERVICE';
 export const WEBHOOK_SERVICE_TOKEN = 'WEBHOOK_SERVICE';
+export const QUOTA_SERVICE_TOKEN = 'QUOTA_SERVICE';
+export { REDIS_CLIENT_KEY } from './services/redis-rate-limit.service';
 
 export const API_KEY_ADAPTER = 'API_KEY_ADAPTER';
 
@@ -261,6 +268,15 @@ export class ApiKeyModule {
       });
     }
 
+    // Add quota service (always enabled for quota support)
+    providers.push({
+      provide: QUOTA_SERVICE_TOKEN,
+      useFactory: (adapter: IApiKeyAdapter, redisClient?: RedisClient) => {
+        return new QuotaService(adapter, redisClient);
+      },
+      inject: [API_KEY_ADAPTER, ...(defaultOptions.redisClient ? [REDIS_CLIENT_KEY] : [])],
+    });
+
     // Add service and guards
     providers.push(
       {
@@ -292,8 +308,10 @@ export class ApiKeyModule {
         useFactory: (
           apiKeyService: ApiKeyService,
           reflector: Reflector,
-          rateLimitService?: RateLimitService,
+          rateLimitService?: RateLimitService | RedisRateLimitService,
           auditLogService?: AuditLogService,
+          analyticsService?: AnalyticsService,
+          quotaService?: QuotaService,
         ) => {
           return new ApiKeyGuard(
             apiKeyService,
@@ -301,6 +319,8 @@ export class ApiKeyModule {
             defaultOptions,
             rateLimitService,
             auditLogService,
+            analyticsService,
+            quotaService,
           );
         },
         inject: [
@@ -308,6 +328,8 @@ export class ApiKeyModule {
           Reflector,
           ...(defaultOptions.enableRateLimiting !== false ? [RATE_LIMIT_SERVICE_TOKEN] : []),
           ...(defaultOptions.enableAuditLogging !== false ? [AUDIT_LOG_SERVICE_TOKEN] : []),
+          ...(defaultOptions.enableAnalytics !== false ? [ANALYTICS_SERVICE_TOKEN] : []),
+          QUOTA_SERVICE_TOKEN,
         ],
       },
       {
@@ -346,6 +368,28 @@ export class ApiKeyModule {
           ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
         ],
       },
+      {
+        provide: RotationPolicyService,
+        useFactory: (adapter: IApiKeyAdapter, apiKeyService: ApiKeyService) => {
+          return new RotationPolicyService(adapter, apiKeyService);
+        },
+        inject: [API_KEY_ADAPTER, ApiKeyService],
+      },
+      {
+        provide: KeyTemplateService,
+        useClass: KeyTemplateService,
+      },
+      {
+        provide: ExportImportService,
+        useFactory: (adapter: IApiKeyAdapter) => {
+          return new ExportImportService(adapter);
+        },
+        inject: [API_KEY_ADAPTER],
+      },
+      {
+        provide: RequestSigningService,
+        useClass: RequestSigningService,
+      },
     );
 
     const moduleExports: Array<
@@ -355,6 +399,10 @@ export class ApiKeyModule {
       | typeof HealthService
       | typeof BulkOperationsService
       | typeof ExpirationNotificationService
+      | typeof RotationPolicyService
+      | typeof KeyTemplateService
+      | typeof ExportImportService
+      | typeof RequestSigningService
       | string
       | typeof CacheService
       | typeof RateLimitService
@@ -388,7 +436,14 @@ export class ApiKeyModule {
     moduleExports.push(
       BulkOperationsService as typeof BulkOperationsService,
       ExpirationNotificationService as typeof ExpirationNotificationService,
+      RotationPolicyService as typeof RotationPolicyService,
+      KeyTemplateService as typeof KeyTemplateService,
+      ExportImportService as typeof ExportImportService,
+      RequestSigningService as typeof RequestSigningService,
     );
+
+    // Always export quota service
+    moduleExports.push(QUOTA_SERVICE_TOKEN);
 
     if (defaultOptions.enableCaching !== false) {
       moduleExports.push(CACHE_SERVICE_TOKEN);

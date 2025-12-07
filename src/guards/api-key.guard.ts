@@ -13,10 +13,17 @@ import { ApiKeyService } from '../services/api-key.service';
 import { ApiKeyModuleOptions } from '../interfaces';
 import { ApiKeyLogger } from '../utils/logger.util';
 import { RateLimitService } from '../services/rate-limit.service';
+import { RedisRateLimitService } from '../services/redis-rate-limit.service';
 import { AuditLogService } from '../services/audit-log.service';
 import { AnalyticsService } from '../services/analytics.service';
+import { QuotaService } from '../services/quota.service';
 import { isIpAllowed, extractClientIp } from '../utils/ip.util';
-import { ANALYTICS_SERVICE_TOKEN } from '../api-key.module';
+import {
+  RATE_LIMIT_SERVICE_TOKEN,
+  AUDIT_LOG_SERVICE_TOKEN,
+  ANALYTICS_SERVICE_TOKEN,
+  QUOTA_SERVICE_TOKEN,
+} from '../api-key.module';
 import { Optional, Inject } from '@nestjs/common';
 
 /**
@@ -25,16 +32,23 @@ import { Optional, Inject } from '@nestjs/common';
  */
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
+  private readonly quotaService?: QuotaService;
+
   constructor(
     private readonly apiKeyService: ApiKeyService,
     private readonly reflector: Reflector,
     private readonly options: ApiKeyModuleOptions,
-    private readonly rateLimitService?: RateLimitService,
-    private readonly auditLogService?: AuditLogService,
+    @Optional()
+    @Inject(RATE_LIMIT_SERVICE_TOKEN)
+    private readonly rateLimitService?: RateLimitService | RedisRateLimitService,
+    @Optional() @Inject(AUDIT_LOG_SERVICE_TOKEN) private readonly auditLogService?: AuditLogService,
     @Optional()
     @Inject(ANALYTICS_SERVICE_TOKEN)
     private readonly analyticsService?: AnalyticsService,
-  ) {}
+    @Optional() @Inject(QUOTA_SERVICE_TOKEN) quotaService?: QuotaService,
+  ) {
+    this.quotaService = quotaService;
+  }
 
   /**
    * Validates the API key from the request and attaches key data if valid.
@@ -108,7 +122,9 @@ export class ApiKeyGuard implements CanActivate {
         const maxRequests = keyData.rateLimitMax;
         const windowMs = keyData.rateLimitWindowMs;
 
-        const status = this.rateLimitService.checkRateLimit(keyData.id, maxRequests, windowMs);
+        const status = await Promise.resolve(
+          this.rateLimitService.checkRateLimit(keyData.id, maxRequests, windowMs),
+        );
 
         response.setHeader('X-RateLimit-Limit', status.limit.toString());
         response.setHeader('X-RateLimit-Remaining', status.remaining.toString());
@@ -125,6 +141,37 @@ export class ApiKeyGuard implements CanActivate {
           );
           throw new HttpException('Rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
         }
+      }
+
+      // Check quota limits
+      if (this.quotaService && keyData.quotaMax && keyData.quotaPeriod) {
+        const quotaStatus = await this.quotaService.checkQuota(keyData);
+
+        response.setHeader('X-Quota-Limit', quotaStatus.limit.toString());
+        response.setHeader('X-Quota-Used', quotaStatus.used.toString());
+        response.setHeader('X-Quota-Remaining', quotaStatus.remaining.toString());
+        response.setHeader('X-Quota-Reset', quotaStatus.resetAt.toISOString());
+
+        if (!quotaStatus.allowed) {
+          await this.auditLogService?.logFailure(
+            ipAddress,
+            method,
+            path,
+            'Quota exceeded',
+            keyData.id,
+            requestId,
+          );
+          throw new HttpException('Quota exceeded', HttpStatus.TOO_MANY_REQUESTS);
+        }
+
+        // Increment quota usage
+        await this.quotaService
+          .incrementUsage(keyData.id, keyData.quotaMax, keyData.quotaPeriod)
+          .catch((error) => {
+            ApiKeyLogger.warn(
+              `Failed to increment quota usage: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+          });
       }
 
       await this.apiKeyService.updateLastUsed(keyData.id).catch((error) => {

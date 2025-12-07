@@ -15,6 +15,8 @@ describe('ApiKeyService', () => {
     findAllActive: jest.fn(),
     revoke: jest.fn(),
     updateLastUsed: jest.fn(),
+    updateQuotaUsage: jest.fn(),
+    query: jest.fn(),
   };
 
   beforeEach(() => {

@@ -9,6 +9,7 @@ export interface RedisClient {
   del(...keys: string[]): Promise<number>;
   keys(pattern: string): Promise<string[]>;
   mget(keys: string[]): Promise<(string | null)[]>;
+  incr(key: string): Promise<number>;
   pipeline(): RedisPipeline;
   zremrangebyscore(key: string, min: number, max: number): Promise<number>;
   zcard(key: string): Promise<number>;

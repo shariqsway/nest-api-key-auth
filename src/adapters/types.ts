@@ -50,3 +50,54 @@ export type TypeOrmApiKeyRepository = Repository<TypeOrmApiKeyEntity>;
  * Type for Mongoose model.
  */
 export type MongooseApiKeyModel = Model<MongooseApiKeyDocument>;
+
+/**
+ * Mongoose query filter type for API keys.
+ */
+export interface MongooseApiKeyFilter {
+  tags?: { $all: string[] };
+  owner?: string;
+  environment?: 'production' | 'staging' | 'development';
+  scopes?: { $all: string[] };
+  revokedAt?: null | { $ne: null };
+  expiresAt?: null | { $gt: Date } | { $lte: Date };
+  createdAt?: { $gte?: Date } | { $lte?: Date } | { $gte?: Date; $lte?: Date };
+  lastUsedAt?: { $gte?: Date } | { $lte?: Date } | { $gte?: Date; $lte?: Date };
+  $or?: Array<
+    | { expiresAt: null }
+    | { expiresAt: { $gt: Date } }
+    | { revokedAt: { $ne: null } }
+    | { expiresAt: { $lte: Date } }
+  >;
+}
+
+/**
+ * TypeORM entity data type for creating API keys.
+ */
+export interface TypeOrmApiKeyEntityData {
+  name: string;
+  keyPrefix: string;
+  hashedKey: string;
+  scopes: string[];
+  expiresAt: Date | null;
+  ipWhitelist: string[];
+  rateLimitMax: number | null;
+  rateLimitWindowMs: number | null;
+  quotaMax: number | null;
+  quotaPeriod: 'daily' | 'monthly' | 'yearly' | null;
+  quotaUsed: number;
+  quotaResetAt: Date | null;
+  metadata: string | null;
+  tags: string[];
+  owner: string | null;
+  environment: 'production' | 'staging' | 'development' | null;
+  description: string | null;
+}
+
+/**
+ * TypeORM update data type for quota updates.
+ */
+export interface TypeOrmQuotaUpdateData {
+  quotaUsed: number;
+  quotaResetAt: Date;
+}

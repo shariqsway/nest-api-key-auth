@@ -6,7 +6,7 @@ import {
   Optional,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { ApiKey as PrismaApiKey, PrismaClient } from '@prisma/client';
+import { ApiKey as PrismaApiKey, PrismaClient, Prisma } from '@prisma/client';
 import { ApiKey } from '../interfaces';
 import { IApiKeyAdapter } from './base.adapter';
 import { ApiKeyLogger } from '../utils/logger.util';
@@ -64,8 +64,21 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
     ipWhitelist?: string[];
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
+    quotaMax?: number | null;
+    quotaPeriod?: 'daily' | 'monthly' | 'yearly' | null;
+    metadata?: Record<string, unknown> | null;
+    tags?: string[];
+    owner?: string | null;
+    environment?: 'production' | 'staging' | 'development' | null;
+    description?: string | null;
   }): Promise<ApiKey> {
     try {
+      const now = new Date();
+      let quotaResetAt: Date | null = null;
+      if (data.quotaMax && data.quotaPeriod) {
+        quotaResetAt = this.calculateQuotaResetAt(now, data.quotaPeriod);
+      }
+
       const apiKey = await this.prisma.apiKey.create({
         data: {
           name: data.name,
@@ -76,6 +89,15 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
           ipWhitelist: data.ipWhitelist || [],
           rateLimitMax: data.rateLimitMax || null,
           rateLimitWindowMs: data.rateLimitWindowMs || null,
+          quotaMax: data.quotaMax || null,
+          quotaPeriod: data.quotaPeriod || null,
+          quotaUsed: 0,
+          quotaResetAt,
+          metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : null,
+          tags: data.tags || [],
+          owner: data.owner || null,
+          environment: data.environment || null,
+          description: data.description || null,
         },
       });
 
@@ -232,6 +254,129 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
     }
   }
 
+  async updateQuotaUsage(id: string, quotaUsed: number, quotaResetAt: Date): Promise<ApiKey> {
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: {
+          quotaUsed,
+          quotaResetAt,
+        },
+      });
+
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error updating quota usage for key ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to update quota usage');
+    }
+  }
+
+  async query(filters: {
+    tags?: string[];
+    owner?: string;
+    environment?: 'production' | 'staging' | 'development';
+    scopes?: string[];
+    active?: boolean;
+    createdAfter?: Date;
+    createdBefore?: Date;
+    lastUsedAfter?: Date;
+    lastUsedBefore?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiKey[]> {
+    try {
+      const where: Prisma.ApiKeyWhereInput = {};
+
+      if (filters.tags && filters.tags.length > 0) {
+        where.tags = { hasEvery: filters.tags };
+      }
+
+      if (filters.owner) {
+        where.owner = filters.owner;
+      }
+
+      if (filters.environment) {
+        where.environment = filters.environment;
+      }
+
+      if (filters.scopes && filters.scopes.length > 0) {
+        where.scopes = { hasEvery: filters.scopes };
+      }
+
+      if (filters.active !== undefined) {
+        if (filters.active) {
+          where.revokedAt = null;
+          where.OR = [{ expiresAt: null }, { expiresAt: { gt: new Date() } }];
+        } else {
+          where.OR = [{ revokedAt: { not: null } }, { expiresAt: { lte: new Date() } }];
+        }
+      }
+
+      if (filters.createdAfter) {
+        where.createdAt = { gte: filters.createdAfter };
+      }
+
+      if (filters.createdBefore) {
+        const existingCreatedAt = where.createdAt as Prisma.DateTimeFilter | undefined;
+        if (existingCreatedAt && 'gte' in existingCreatedAt) {
+          where.createdAt = { ...existingCreatedAt, lte: filters.createdBefore };
+        } else {
+          where.createdAt = { lte: filters.createdBefore };
+        }
+      }
+
+      if (filters.lastUsedAfter) {
+        where.lastUsedAt = { gte: filters.lastUsedAfter };
+      }
+
+      if (filters.lastUsedBefore) {
+        const existingLastUsedAt = where.lastUsedAt as Prisma.DateTimeFilter | undefined;
+        if (existingLastUsedAt && 'gte' in existingLastUsedAt) {
+          where.lastUsedAt = { ...existingLastUsedAt, lte: filters.lastUsedBefore };
+        } else {
+          where.lastUsedAt = { lte: filters.lastUsedBefore };
+        }
+      }
+
+      const apiKeys = await this.prisma.apiKey.findMany({
+        where,
+        take: filters.limit || 100,
+        skip: filters.offset || 0,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return apiKeys.map((key) => this.mapToApiKey(key));
+    } catch (error) {
+      ApiKeyLogger.error('Error querying API keys', error instanceof Error ? error : String(error));
+      throw new InternalServerErrorException('Failed to query API keys');
+    }
+  }
+
+  private calculateQuotaResetAt(now: Date, period: 'daily' | 'monthly' | 'yearly'): Date {
+    const resetAt = new Date(now);
+    switch (period) {
+      case 'daily':
+        resetAt.setDate(resetAt.getDate() + 1);
+        resetAt.setHours(0, 0, 0, 0);
+        break;
+      case 'monthly':
+        resetAt.setMonth(resetAt.getMonth() + 1);
+        resetAt.setDate(1);
+        resetAt.setHours(0, 0, 0, 0);
+        break;
+      case 'yearly':
+        resetAt.setFullYear(resetAt.getFullYear() + 1);
+        resetAt.setMonth(0);
+        resetAt.setDate(1);
+        resetAt.setHours(0, 0, 0, 0);
+        break;
+    }
+    return resetAt;
+  }
+
   /**
    * Maps a Prisma API key model to the application's ApiKey interface.
    *
@@ -251,6 +396,15 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
       ipWhitelist: prismaKey.ipWhitelist || [],
       rateLimitMax: prismaKey.rateLimitMax || undefined,
       rateLimitWindowMs: prismaKey.rateLimitWindowMs || undefined,
+      quotaMax: prismaKey.quotaMax || undefined,
+      quotaPeriod: (prismaKey.quotaPeriod as 'daily' | 'monthly' | 'yearly') || undefined,
+      quotaUsed: prismaKey.quotaUsed || undefined,
+      quotaResetAt: prismaKey.quotaResetAt || undefined,
+      metadata: prismaKey.metadata ? (prismaKey.metadata as Record<string, unknown>) : undefined,
+      tags: prismaKey.tags || undefined,
+      owner: prismaKey.owner || undefined,
+      environment: (prismaKey.environment as 'production' | 'staging' | 'development') || undefined,
+      description: prismaKey.description || undefined,
       createdAt: prismaKey.createdAt,
       updatedAt: prismaKey.updatedAt,
     };
