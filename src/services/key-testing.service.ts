@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ApiKeyService } from './api-key.service';
 import { ApiKeyLogger } from '../utils/logger.util';
+import { ApiKeyState } from '../interfaces';
 
 export interface KeyTestResult {
   valid: boolean;
   keyId?: string;
   keyName?: string;
   scopes?: string[];
+  state?: ApiKeyState;
   expiresAt?: Date | null;
   revokedAt?: Date | null;
   errors?: string[];
@@ -44,19 +46,32 @@ export class KeyTestingService {
         keyId: key.id,
         keyName: key.name,
         scopes: key.scopes,
+        state: key.state,
         expiresAt: key.expiresAt,
         revokedAt: key.revokedAt,
       };
 
-      // Check for warnings
-      if (key.revokedAt) {
+      // Check key state and add appropriate errors
+      if (key.state === 'revoked' || key.revokedAt) {
         errors.push('Key has been revoked');
         result.valid = false;
-      }
-
-      if (key.expiresAt && key.expiresAt <= new Date()) {
+      } else if (key.state === 'suspended' || key.suspendedAt) {
+        errors.push('Key has been suspended');
+        result.valid = false;
+      } else if (key.state === 'pending') {
+        errors.push('Key is pending approval');
+        result.valid = false;
+      } else if (key.state === 'expired') {
         errors.push('Key has expired');
         result.valid = false;
+      } else if (key.expiresAt && key.expiresAt <= new Date()) {
+        // Check expiration even if state hasn't been updated yet
+        const gracePeriodMs = key.expirationGracePeriodMs || 0;
+        const effectiveExpirationTime = key.expiresAt.getTime() + gracePeriodMs;
+        if (new Date().getTime() > effectiveExpirationTime) {
+          errors.push('Key has expired');
+          result.valid = false;
+        }
       }
 
       if (errors.length > 0) {

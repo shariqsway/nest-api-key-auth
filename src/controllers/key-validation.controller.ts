@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiKeyService } from '../services/api-key.service';
 import { KeyTestingService } from '../services/key-testing.service';
 
@@ -47,7 +47,7 @@ export class KeyValidationController {
             id: result.keyId,
             name: result.keyName || 'Unknown',
             scopes: result.scopes || [],
-            state: result.revokedAt ? 'revoked' : 'active',
+            state: result.state || 'active',
             expiresAt: result.expiresAt || null,
           },
         };
@@ -83,7 +83,7 @@ export class KeyValidationController {
             id: result.keyId,
             name: result.keyName || 'Unknown',
             scopes: result.scopes || [],
-            state: result.revokedAt ? 'revoked' : 'active',
+            state: result.state || 'active',
             expiresAt: result.expiresAt || null,
           },
         };
