@@ -21,6 +21,8 @@ export interface UsageAnalytics {
   errorRate: number;
 }
 
+export const ANALYTICS_SERVICE_TOKEN = 'ANALYTICS_SERVICE';
+
 /**
  * Service for tracking API key usage analytics and metrics.
  */

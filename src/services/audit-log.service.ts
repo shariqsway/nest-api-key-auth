@@ -24,6 +24,7 @@ export interface AuditLogOptions {
 }
 
 export const AUDIT_LOG_ADAPTER_TOKEN = 'AUDIT_LOG_ADAPTER';
+export const AUDIT_LOG_SERVICE_TOKEN = 'AUDIT_LOG_SERVICE';
 
 /**
  * Service for logging API key usage and security events.

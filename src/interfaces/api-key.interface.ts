@@ -6,8 +6,10 @@ export interface ApiKey {
   scopes: string[];
   expiresAt: Date | null;
   revokedAt: Date | null;
+  revocationReason?: string | null; // New: Reason for revocation
   lastUsedAt: Date | null;
   ipWhitelist?: string[];
+  ipBlacklist?: string[]; // New: IP addresses/ranges to block
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
   quotaMax?: number | null;
@@ -28,6 +30,7 @@ export interface CreateApiKeyDto {
   scopes?: string[];
   expiresAt?: Date;
   ipWhitelist?: string[];
+  ipBlacklist?: string[]; // New: IP addresses/ranges to block
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
   quotaMax?: number;

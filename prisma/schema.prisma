@@ -14,8 +14,10 @@ model ApiKey {
   scopes           String[] @default([])
   expiresAt        DateTime?
   revokedAt        DateTime?
+  revocationReason String?  @db.Text // Reason for revocation
   lastUsedAt       DateTime?
   ipWhitelist      String[] @default([])
+  ipBlacklist      String[] @default([]) // IP addresses/ranges to block
   rateLimitMax     Int?
   rateLimitWindowMs Int?
   quotaMax         Int?                       // Usage quota maximum

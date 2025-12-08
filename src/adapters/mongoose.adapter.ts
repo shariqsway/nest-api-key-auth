@@ -21,6 +21,7 @@ export class MongooseAdapter implements IApiKeyAdapter {
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
+    ipBlacklist?: string[]; // New: IP addresses/ranges to block
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -45,6 +46,7 @@ export class MongooseAdapter implements IApiKeyAdapter {
         scopes: data.scopes,
         expiresAt: data.expiresAt || null,
         ipWhitelist: data.ipWhitelist || [],
+        ipBlacklist: data.ipBlacklist || [],
         rateLimitMax: data.rateLimitMax || null,
         rateLimitWindowMs: data.rateLimitWindowMs || null,
         quotaMax: data.quotaMax || null,
@@ -98,8 +100,12 @@ export class MongooseAdapter implements IApiKeyAdapter {
     return this.mapToApiKey(apiKey);
   }
 
-  async revoke(id: string): Promise<ApiKey> {
-    const apiKey = await this.model.findByIdAndUpdate(id, { revokedAt: new Date() }, { new: true });
+  async revoke(id: string, reason?: string): Promise<ApiKey> {
+    const apiKey = await this.model.findByIdAndUpdate(
+      id,
+      { revokedAt: new Date(), revocationReason: reason || null },
+      { new: true },
+    );
 
     if (!apiKey) {
       throw new Error(`API key with ID ${id} not found`);
@@ -289,9 +295,11 @@ export class MongooseAdapter implements IApiKeyAdapter {
       scopes: doc.scopes || [],
       expiresAt: doc.expiresAt,
       revokedAt: doc.revokedAt,
+      revocationReason: docAny.revocationReason || undefined,
       lastUsedAt: doc.lastUsedAt,
-      ipWhitelist: doc.ipWhitelist || [],
-      rateLimitMax: doc.rateLimitMax || undefined,
+      ipWhitelist: docAny.ipWhitelist || [],
+      ipBlacklist: docAny.ipBlacklist || [],
+      rateLimitMax: docAny.rateLimitMax || undefined,
       rateLimitWindowMs: doc.rateLimitWindowMs || undefined,
       quotaMax: docAny.quotaMax || undefined,
       quotaPeriod: (docAny.quotaPeriod as 'daily' | 'monthly' | 'yearly') || undefined,

@@ -13,8 +13,10 @@ export interface TypeOrmApiKeyEntity {
   scopes: string[];
   expiresAt: Date | null;
   revokedAt: Date | null;
+  revocationReason?: string | null;
   lastUsedAt: Date | null;
   ipWhitelist?: string[];
+  ipBlacklist?: string[];
   rateLimitMax?: number | null;
   rateLimitWindowMs?: number | null;
   createdAt: Date;
@@ -33,8 +35,10 @@ export interface MongooseApiKeyDocument extends Document {
   scopes: string[];
   expiresAt: Date | null;
   revokedAt: Date | null;
+  revocationReason?: string | null;
   lastUsedAt: Date | null;
   ipWhitelist?: string[];
+  ipBlacklist?: string[];
   rateLimitMax?: number | null;
   rateLimitWindowMs?: number | null;
   createdAt: Date;
@@ -81,6 +85,7 @@ export interface TypeOrmApiKeyEntityData {
   scopes: string[];
   expiresAt: Date | null;
   ipWhitelist: string[];
+  ipBlacklist: string[];
   rateLimitMax: number | null;
   rateLimitWindowMs: number | null;
   quotaMax: number | null;

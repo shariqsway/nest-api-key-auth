@@ -27,6 +27,36 @@ import { RotationPolicyService } from './services/rotation-policy.service';
 import { KeyTemplateService } from './services/key-template.service';
 import { ExportImportService } from './services/export-import.service';
 import { RequestSigningService } from './services/request-signing.service';
+import { ThreatDetectionService } from './services/threat-detection.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { KeyHistoryService } from './services/key-history.service';
+import { EndpointRateLimitService } from './services/endpoint-rate-limit.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { KeyGroupService } from './services/key-group.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { MultiTenancyService } from './services/multi-tenancy.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { KeyVersioningService } from './services/key-versioning.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { UsageReportService } from './services/usage-report.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { CircuitBreakerService } from './services/circuit-breaker.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { KeyCloningService } from './services/key-cloning.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { KeyTransferService } from './services/key-transfer.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { KeyTestingService } from './services/key-testing.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { SecurityScoringService } from './services/security-scoring.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { KeyAliasService } from './services/key-alias.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { ComplianceService } from './services/compliance.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { GraphQLApiKeyGuard } from './guards/graphql-api-key.guard';
+
+// These services are used in the module providers below
 import { RedisClient } from './types/redis.types';
 import { PrismaAuditLogAdapter } from './adapters/prisma-audit-log.adapter';
 import {
@@ -48,6 +78,8 @@ export const AUDIT_LOG_SERVICE_TOKEN = 'AUDIT_LOG_SERVICE';
 export const ANALYTICS_SERVICE_TOKEN = 'ANALYTICS_SERVICE';
 export const WEBHOOK_SERVICE_TOKEN = 'WEBHOOK_SERVICE';
 export const QUOTA_SERVICE_TOKEN = 'QUOTA_SERVICE';
+export const THREAT_DETECTION_SERVICE_TOKEN = 'THREAT_DETECTION_SERVICE';
+export const ENDPOINT_RATE_LIMIT_SERVICE_TOKEN = 'ENDPOINT_RATE_LIMIT_SERVICE';
 export { REDIS_CLIENT_KEY } from './services/redis-rate-limit.service';
 
 export const API_KEY_ADAPTER = 'API_KEY_ADAPTER';
@@ -277,6 +309,34 @@ export class ApiKeyModule {
       inject: [API_KEY_ADAPTER, ...(defaultOptions.redisClient ? [REDIS_CLIENT_KEY] : [])],
     });
 
+    // Add threat detection service (always enabled)
+    providers.push({
+      provide: ThreatDetectionService,
+      useFactory: (
+        adapter: IApiKeyAdapter,
+        auditLogService?: AuditLogService,
+        webhookService?: WebhookService,
+        redisClient?: RedisClient,
+      ) => {
+        return new ThreatDetectionService(adapter, auditLogService, webhookService, redisClient);
+      },
+      inject: [
+        API_KEY_ADAPTER,
+        ...(defaultOptions.enableAuditLogging !== false ? [AUDIT_LOG_SERVICE_TOKEN] : []),
+        ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
+        ...(defaultOptions.redisClient ? [REDIS_CLIENT_KEY] : []),
+      ],
+    });
+
+    // Add endpoint rate limit service (always enabled)
+    providers.push({
+      provide: EndpointRateLimitService,
+      useFactory: (redisClient?: RedisClient) => {
+        return new EndpointRateLimitService(redisClient);
+      },
+      inject: [...(defaultOptions.redisClient ? [REDIS_CLIENT_KEY] : [])],
+    });
+
     // Add service and guards
     providers.push(
       {
@@ -312,6 +372,8 @@ export class ApiKeyModule {
           auditLogService?: AuditLogService,
           analyticsService?: AnalyticsService,
           quotaService?: QuotaService,
+          threatDetectionService?: ThreatDetectionService,
+          endpointRateLimitService?: EndpointRateLimitService,
         ) => {
           return new ApiKeyGuard(
             apiKeyService,
@@ -321,6 +383,8 @@ export class ApiKeyModule {
             auditLogService,
             analyticsService,
             quotaService,
+            threatDetectionService,
+            endpointRateLimitService,
           );
         },
         inject: [
@@ -330,6 +394,8 @@ export class ApiKeyModule {
           ...(defaultOptions.enableAuditLogging !== false ? [AUDIT_LOG_SERVICE_TOKEN] : []),
           ...(defaultOptions.enableAnalytics !== false ? [ANALYTICS_SERVICE_TOKEN] : []),
           QUOTA_SERVICE_TOKEN,
+          ThreatDetectionService,
+          EndpointRateLimitService,
         ],
       },
       {

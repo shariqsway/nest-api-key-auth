@@ -54,6 +54,24 @@ A comprehensive NestJS module for API key-based authentication with built-in sec
   - [Export/Import Functionality](#exportimport-functionality)
   - [Request Signing (HMAC)](#request-signing-hmac)
   - [Key Templates](#key-templates)
+  - [IP Blacklisting](#ip-blacklisting)
+  - [Revocation Reason Tracking](#revocation-reason-tracking)
+  - [Security Threat Detection](#security-threat-detection)
+  - [Key History/Audit Trail](#key-historyaudit-trail)
+  - [Endpoint-Specific Rate Limiting](#endpoint-specific-rate-limiting)
+  - [GraphQL Support](#graphql-support)
+  - [Express Middleware](#express-middleware)
+  - [Key Groups/Teams](#key-groupsteams)
+  - [Multi-Tenancy Support](#multi-tenancy-support)
+  - [Key Versioning](#key-versioning)
+  - [Usage Reports](#usage-reports)
+  - [Circuit Breaker Pattern](#circuit-breaker-pattern)
+  - [Key Cloning](#key-cloning)
+  - [Key Transfer/Sharing](#key-transfersharing)
+  - [Key Testing Endpoint](#key-testing-endpoint)
+  - [Key Security Scoring](#key-security-scoring)
+  - [Key Aliases](#key-aliases)
+  - [Compliance Features](#compliance-features)
 - [Security](#security)
 - [Testing](#testing)
 - [Logging](#logging)
@@ -94,10 +112,14 @@ A comprehensive NestJS module for API key-based authentication with built-in sec
 **Advanced Features:**
 
 - Rate limiting - Per-key rate limiting with configurable limits
+- Endpoint-specific rate limiting - Per-route rate limits with decorator support
 - Usage quotas - Per-key usage limits (daily, monthly, yearly) with automatic reset
 - Redis support - Distributed rate limiting and caching with Redis (with in-memory fallback)
 - IP whitelisting - Restrict keys to specific IP addresses or CIDR ranges
+- IP blacklisting - Block specific IP addresses or CIDR ranges (takes precedence over whitelisting)
 - Audit logging - Comprehensive request logging for security and compliance (with database storage)
+- Key history/audit trail - Track all key changes, modification history, and rollback capability
+- Security threat detection - Anomaly detection, brute force protection, and suspicious activity alerts
 - Caching layer - In-memory or Redis-based caching for improved performance
 - Usage analytics - Track API key usage, performance metrics, and request statistics
 - Webhook notifications - Real-time notifications for key events (create, revoke, rotate, expire)
@@ -111,6 +133,20 @@ A comprehensive NestJS module for API key-based authentication with built-in sec
 - Export/Import - Export key configurations and import metadata for backup and migration
 - Request signing (HMAC) - Support for HMAC signature verification for enhanced security
 - Key templates - Define reusable API key configurations and presets
+- Revocation reason tracking - Store reasons for API key revocation for audit purposes
+- GraphQL support - Guards for GraphQL resolvers with context integration
+- Express middleware - Standalone middleware for non-NestJS applications
+- Key groups/teams - Group management, group-level permissions, and bulk operations
+- Multi-tenancy support - Tenant isolation, tenant-scoped queries, and tenant-level limits
+- Key versioning - Track versions, version history, and rollback capability
+- Usage reports - Generate PDF/CSV reports for compliance and analytics
+- Circuit breaker pattern - Resilience for database failures with automatic recovery
+- Key cloning - Clone keys with same permissions/metadata
+- Key sharing/transfer - Transfer ownership between users/teams
+- Key testing endpoint - Test key validity without real requests
+- Key security scoring - Risk score based on usage patterns
+- Key aliases - Multiple names for the same key
+- Compliance features - GDPR export, SOC2 audit trails, and data retention
 
 **Developer Experience:**
 
@@ -476,6 +512,7 @@ const key = await apiKeyService.create({
   scopes: ['read:projects'], // Optional
   expiresAt: new Date('2025-12-31'), // Optional: expiration date
   ipWhitelist: ['192.168.1.0/24'], // Optional: IP restrictions
+  ipBlacklist: ['192.168.1.100'], // Optional: IP blacklist (takes precedence over whitelist)
   rateLimitMax: 1000, // Optional: max requests per window
   rateLimitWindowMs: 60000, // Optional: time window in milliseconds
   quotaMax: 10000, // Optional: maximum requests per quota period
@@ -526,13 +563,16 @@ const activeKeys = await apiKeyService.findAllActive();
 console.log(`Active keys: ${activeKeys.length}`);
 ```
 
-#### `revoke(id: string): Promise<ApiKey>`
+#### `revoke(id: string, options?: { reason?: string }): Promise<ApiKey>`
 
 Revokes an API key by ID. Once revoked, the key can no longer be used.
 
 ```typescript
-const revokedKey = await apiKeyService.revoke('key-id-123');
+const revokedKey = await apiKeyService.revoke('key-id-123', {
+  reason: 'Security breach detected',
+});
 console.log(`Revoked at: ${revokedKey.revokedAt}`);
+console.log(`Reason: ${revokedKey.revocationReason}`);
 ```
 
 **Throws:**
@@ -677,8 +717,10 @@ The `ApiKey` table/collection contains:
 - `revokedAt`: Revocation timestamp (null if active)
 - `lastUsedAt`: Last usage timestamp (null if never used)
 - `ipWhitelist`: Array of allowed IP addresses
+- `ipBlacklist`: Array of blocked IP addresses (takes precedence over whitelist)
 - `rateLimitMax`: Maximum requests per window
 - `rateLimitWindowMs`: Rate limit window in milliseconds
+- `revocationReason`: Reason for revocation (null if active)
 - `quotaMax`: Maximum requests allowed within a quota period (null if no quota)
 - `quotaPeriod`: Quota period - 'daily', 'monthly', or 'yearly' (null if no quota)
 - `quotaUsed`: Number of requests used in current quota period
@@ -1334,6 +1376,439 @@ export class AppService implements OnModuleInit {
 }
 ```
 
+### IP Blacklisting
+
+Block specific IP addresses or CIDR ranges. Blacklist takes precedence over whitelist:
+
+```typescript
+const key = await apiKeyService.create({
+  name: 'My App',
+  ipWhitelist: ['192.168.1.0/24'], // Allow this range
+  ipBlacklist: ['192.168.1.100'], // But block this specific IP
+});
+```
+
+**Note:** If an IP is in both whitelist and blacklist, it will be blocked (blacklist takes precedence).
+
+### Revocation Reason Tracking
+
+Track the reason for API key revocation:
+
+```typescript
+const revokedKey = await apiKeyService.revoke('key-id-123', {
+  reason: 'Security breach detected',
+});
+console.log(revokedKey.revocationReason); // 'Security breach detected'
+```
+
+### Security Threat Detection
+
+Detect and respond to security threats:
+
+```typescript
+import { ThreatDetectionService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly threatDetection: ThreatDetectionService) {}
+
+  async checkThreats(ipAddress: string) {
+    const stats = await this.threatDetection.getThreatStats(ipAddress);
+    if (stats.isBlocked) {
+      throw new Error('IP address is blocked due to suspicious activity');
+    }
+  }
+}
+```
+
+**Features:**
+- Brute force detection (configurable threshold)
+- Anomaly detection based on usage patterns
+- Automatic blocking of suspicious IPs
+- Integration with audit logging and webhooks
+
+### Key History/Audit Trail
+
+Track all changes to API keys:
+
+```typescript
+import { KeyHistoryService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly keyHistory: KeyHistoryService) {}
+
+  async getKeyHistory(keyId: string) {
+    const history = await this.keyHistory.getKeyHistory(keyId);
+    return history; // Array of all changes
+  }
+
+  async compareVersions(keyId: string, version1: number, version2: number) {
+    const diff = await this.keyHistory.compareKeys(keyId, version1, version2);
+    return diff; // Shows what changed between versions
+  }
+}
+```
+
+### Endpoint-Specific Rate Limiting
+
+Set different rate limits for different endpoints:
+
+```typescript
+import { EndpointRateLimit } from 'nest-api-key-auth';
+
+@Controller('projects')
+export class ProjectsController {
+  @Get()
+  @ApiKeyAuth()
+  @EndpointRateLimit({ max: 100, windowMs: 60000 }) // 100 requests per minute
+  findAll() {
+    return [];
+  }
+
+  @Post()
+  @ApiKeyAuth()
+  @EndpointRateLimit({ max: 10, windowMs: 60000 }) // 10 requests per minute
+  create() {
+    return {};
+  }
+}
+```
+
+**Using the service directly:**
+
+```typescript
+import { EndpointRateLimitService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly endpointRateLimit: EndpointRateLimitService) {}
+
+  async checkLimit(endpoint: string, keyId: string) {
+    const allowed = await this.endpointRateLimit.checkEndpointLimit(endpoint, keyId, {
+      max: 100,
+      windowMs: 60000,
+    });
+    if (!allowed) {
+      throw new Error('Rate limit exceeded');
+    }
+  }
+}
+```
+
+### GraphQL Support
+
+Use API key authentication with GraphQL resolvers:
+
+```typescript
+import { GraphQLApiKeyGuard } from 'nest-api-key-auth';
+
+@Resolver()
+export class ProjectsResolver {
+  @Query(() => [Project])
+  @UseGuards(GraphQLApiKeyGuard)
+  async projects(@Context() context: any) {
+    const apiKey = context.req.apiKey; // API key data is attached to context
+    return [];
+  }
+}
+```
+
+**Note:** Requires `@nestjs/graphql` to be installed. The guard automatically extracts API keys from GraphQL context and validates them.
+
+### Express Middleware
+
+Use API key authentication in non-NestJS Express applications:
+
+```typescript
+import express from 'express';
+import { createApiKeyMiddleware } from 'nest-api-key-auth';
+
+const app = express();
+
+// Configure the middleware
+const apiKeyMiddleware = createApiKeyMiddleware({
+  adapter: 'prisma',
+  prismaClient: prisma,
+  headerName: 'x-api-key',
+});
+
+// Use the middleware
+app.use('/api', apiKeyMiddleware);
+
+app.get('/api/projects', (req, res) => {
+  const apiKey = req.apiKey; // API key data is attached to request
+  res.json([]);
+});
+```
+
+### Key Groups/Teams
+
+Organize API keys into groups with group-level permissions:
+
+```typescript
+import { KeyGroupService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly keyGroup: KeyGroupService) {}
+
+  async createGroup() {
+    const group = await this.keyGroup.createGroup({
+      name: 'Backend Team',
+      description: 'API keys for backend services',
+      defaultScopes: ['read:projects', 'write:projects'],
+    });
+    return group;
+  }
+
+  async addKeyToGroup(keyId: string, groupId: string) {
+    await this.keyGroup.addKeyToGroup(keyId, groupId);
+  }
+
+  async getGroupKeys(groupId: string) {
+    return await this.keyGroup.getGroupKeys(groupId);
+  }
+}
+```
+
+### Multi-Tenancy Support
+
+Isolate API keys by tenant:
+
+```typescript
+import { MultiTenancyService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly multiTenancy: MultiTenancyService) {}
+
+  async createTenant(tenantId: string) {
+    await this.multiTenancy.createTenant(tenantId, {
+      name: 'Acme Corp',
+      limits: { maxKeys: 100, maxRequestsPerDay: 1000000 },
+    });
+  }
+
+  async assignKeyToTenant(keyId: string, tenantId: string) {
+    await this.multiTenancy.assignKeyToTenant(keyId, tenantId);
+  }
+
+  async getTenantKeys(tenantId: string) {
+    return await this.multiTenancy.getTenantKeys(tenantId);
+  }
+}
+```
+
+### Key Versioning
+
+Track versions of API keys and rollback if needed:
+
+```typescript
+import { KeyVersioningService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly keyVersioning: KeyVersioningService) {}
+
+  async getKeyVersions(keyId: string) {
+    return await this.keyVersioning.getKeyVersions(keyId);
+  }
+
+  async rollbackKey(keyId: string, version: number) {
+    return await this.keyVersioning.rollbackKey(keyId, version);
+  }
+}
+```
+
+### Usage Reports
+
+Generate compliance and analytics reports:
+
+```typescript
+import { UsageReportService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly reportService: UsageReportService) {}
+
+  async generateReport(keyId: string, format: 'pdf' | 'csv' = 'pdf') {
+    const report = await this.reportService.generateReport(keyId, {
+      startDate: new Date('2024-01-01'),
+      endDate: new Date('2024-12-31'),
+      format,
+    });
+    return report;
+  }
+}
+```
+
+### Circuit Breaker Pattern
+
+Add resilience for database failures:
+
+```typescript
+import { CircuitBreakerService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly circuitBreaker: CircuitBreakerService) {}
+
+  async executeWithCircuitBreaker<T>(operation: () => Promise<T>): Promise<T> {
+    return await this.circuitBreaker.execute('database-operation', operation);
+  }
+}
+```
+
+**Configuration:**
+- Automatic failure detection
+- Circuit opens after threshold failures
+- Automatic recovery attempts
+- Configurable timeouts and thresholds
+
+### Key Cloning
+
+Clone existing API keys with same permissions:
+
+```typescript
+import { KeyCloningService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly keyCloning: KeyCloningService) {}
+
+  async cloneKey(sourceKeyId: string, newName: string) {
+    const cloned = await this.keyCloning.cloneKey(sourceKeyId, {
+      name: newName,
+      // Optionally override properties
+      scopes: ['read:projects'], // Override scopes
+    });
+    return cloned;
+  }
+}
+```
+
+### Key Transfer/Sharing
+
+Transfer API key ownership between users or teams:
+
+```typescript
+import { KeyTransferService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly keyTransfer: KeyTransferService) {}
+
+  async transferKey(keyId: string, newOwner: string) {
+    await this.keyTransfer.transferKeyOwnership(keyId, newOwner, {
+      notifyOldOwner: true,
+      notifyNewOwner: true,
+    });
+  }
+}
+```
+
+### Key Testing Endpoint
+
+Test API key validity without making real requests:
+
+```typescript
+import { KeyTestingService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly keyTesting: KeyTestingService) {}
+
+  async testKey(apiKey: string) {
+    const result = await this.keyTesting.testKey(apiKey);
+    return {
+      valid: result.valid,
+      key: result.key,
+      error: result.error,
+    };
+  }
+
+  async testKeys(apiKeys: string[]) {
+    const results = await this.keyTesting.testKeys(apiKeys);
+    return results; // Array of test results
+  }
+}
+```
+
+### Key Security Scoring
+
+Calculate risk scores based on usage patterns:
+
+```typescript
+import { SecurityScoringService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly securityScoring: SecurityScoringService) {}
+
+  async getSecurityScore(keyId: string) {
+    const score = await this.securityScoring.calculateSecurityScore(keyId);
+    return {
+      score: score.score, // 0-100, higher is more secure
+      factors: score.factors, // Array of factors affecting the score
+      recommendations: score.recommendations, // Array of improvement suggestions
+    };
+  }
+}
+```
+
+### Key Aliases
+
+Assign multiple names to the same API key:
+
+```typescript
+import { KeyAliasService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly keyAlias: KeyAliasService) {}
+
+  async createAlias(keyId: string, alias: string) {
+    await this.keyAlias.createAlias(keyId, alias);
+  }
+
+  async resolveAlias(alias: string) {
+    const keyId = await this.keyAlias.resolveAlias(alias);
+    return keyId;
+  }
+}
+```
+
+### Compliance Features
+
+GDPR export, SOC2 audit trails, and data retention:
+
+```typescript
+import { ComplianceService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly compliance: ComplianceService) {}
+
+  async exportGdprData(userId: string) {
+    const data = await this.compliance.exportGdprData(userId);
+    return data; // All user-related API key data
+  }
+
+  async getAuditTrail(keyId: string, startDate: Date, endDate: Date) {
+    const trail = await this.compliance.getAuditTrail(keyId, startDate, endDate);
+    return trail; // SOC2-compliant audit trail
+  }
+
+  async enforceDataRetention() {
+    await this.compliance.enforceDataRetention({
+      retentionDays: 90,
+      deleteExpiredKeys: true,
+    });
+  }
+}
+```
+
 ---
 
 ## Security
@@ -1362,8 +1837,15 @@ export class AppService implements OnModuleInit {
 **Security Features:**
 
 - Rate limiting - Prevent abuse with per-key rate limits
+- Endpoint-specific rate limiting - Per-route rate limits
 - IP whitelisting - Restrict access to specific IP addresses
+- IP blacklisting - Block specific IP addresses (takes precedence over whitelisting)
 - Audit logging - Track all API key usage for security monitoring
+- Security threat detection - Anomaly detection, brute force protection, suspicious activity alerts
+- Key history/audit trail - Track all key changes and modifications
+- Revocation reason tracking - Store reasons for key revocation
+- Circuit breaker pattern - Resilience for database failures
+- Security scoring - Risk assessment based on usage patterns
 
 ---
 

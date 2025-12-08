@@ -15,8 +15,8 @@ export type WebhookEvent =
   | 'key.rotated'
   | 'key.expired'
   | 'key.expiring'
-  | 'key.expired'
-  | 'key.updated';
+  | 'key.updated'
+  | 'threat.detected';
 
 export interface WebhookPayload {
   event: WebhookEvent;
@@ -27,6 +27,8 @@ export interface WebhookPayload {
     [key: string]: unknown;
   };
 }
+
+export const WEBHOOK_SERVICE_TOKEN = 'WEBHOOK_SERVICE';
 
 /**
  * Service for sending webhook notifications for API key events.

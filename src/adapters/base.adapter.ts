@@ -18,6 +18,7 @@ export interface IApiKeyAdapter {
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
+    ipBlacklist?: string[]; // New: IP addresses/ranges to block
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -49,9 +50,10 @@ export interface IApiKeyAdapter {
    * Revokes an API key by setting its revokedAt timestamp.
    *
    * @param id - The API key ID to revoke
+   * @param reason - Optional reason for revocation
    * @returns The revoked API key
    */
-  revoke(id: string): Promise<ApiKey>;
+  revoke(id: string, reason?: string): Promise<ApiKey>;
 
   /**
    * Retrieves all API keys from the database, including revoked ones.

@@ -17,13 +17,21 @@ import { RedisRateLimitService } from '../services/redis-rate-limit.service';
 import { AuditLogService } from '../services/audit-log.service';
 import { AnalyticsService } from '../services/analytics.service';
 import { QuotaService } from '../services/quota.service';
-import { isIpAllowed, extractClientIp } from '../utils/ip.util';
+import { ThreatDetectionService } from '../services/threat-detection.service';
+import { EndpointRateLimitService } from '../services/endpoint-rate-limit.service';
+import { isIpAllowed, isIpBlocked, extractClientIp } from '../utils/ip.util';
 import {
   RATE_LIMIT_SERVICE_TOKEN,
   AUDIT_LOG_SERVICE_TOKEN,
   ANALYTICS_SERVICE_TOKEN,
   QUOTA_SERVICE_TOKEN,
+  THREAT_DETECTION_SERVICE_TOKEN,
+  ENDPOINT_RATE_LIMIT_SERVICE_TOKEN,
 } from '../api-key.module';
+import {
+  ENDPOINT_RATE_LIMIT_KEY,
+  EndpointRateLimitOptions,
+} from '../decorators/endpoint-rate-limit.decorator';
 import { Optional, Inject } from '@nestjs/common';
 
 /**
@@ -46,6 +54,12 @@ export class ApiKeyGuard implements CanActivate {
     @Inject(ANALYTICS_SERVICE_TOKEN)
     private readonly analyticsService?: AnalyticsService,
     @Optional() @Inject(QUOTA_SERVICE_TOKEN) quotaService?: QuotaService,
+    @Optional()
+    @Inject(THREAT_DETECTION_SERVICE_TOKEN)
+    private readonly threatDetectionService?: ThreatDetectionService,
+    @Optional()
+    @Inject(ENDPOINT_RATE_LIMIT_SERVICE_TOKEN)
+    private readonly endpointRateLimitService?: EndpointRateLimitService,
   ) {
     this.quotaService = quotaService;
   }
@@ -70,6 +84,7 @@ export class ApiKeyGuard implements CanActivate {
 
       if (!apiKey) {
         ApiKeyLogger.debug('API key missing from request');
+        await this.threatDetectionService?.recordFailedAttempt(ipAddress);
         await this.auditLogService?.logFailure(
           ipAddress,
           method,
@@ -86,6 +101,7 @@ export class ApiKeyGuard implements CanActivate {
 
       if (!keyData) {
         ApiKeyLogger.warn('Invalid API key provided');
+        await this.threatDetectionService?.recordFailedAttempt(ipAddress);
         await this.auditLogService?.logFailure(
           ipAddress,
           method,
@@ -98,6 +114,27 @@ export class ApiKeyGuard implements CanActivate {
         throw new UnauthorizedException('Invalid API key');
       }
 
+      // Record successful request for threat detection
+      await this.threatDetectionService?.recordSuccessfulRequest(keyData.id, ipAddress, path);
+
+      // Check IP blacklist first (takes precedence)
+      if (keyData.ipBlacklist && keyData.ipBlacklist.length > 0) {
+        if (isIpBlocked(ipAddress, keyData.ipBlacklist)) {
+          ApiKeyLogger.warn(`IP address ${ipAddress} is blocked for key ${keyData.id}`);
+          await this.auditLogService?.logFailure(
+            ipAddress,
+            method,
+            path,
+            'IP address is blocked',
+            keyData.id,
+            requestId,
+          );
+          this.analyticsService?.recordFailure(keyData.id);
+          throw new ForbiddenException('IP address is blocked');
+        }
+      }
+
+      // Check IP whitelist
       if (keyData.ipWhitelist && keyData.ipWhitelist.length > 0) {
         if (!isIpAllowed(ipAddress, keyData.ipWhitelist)) {
           ApiKeyLogger.warn(`IP address ${ipAddress} not allowed for key ${keyData.id}`);
@@ -140,6 +177,47 @@ export class ApiKeyGuard implements CanActivate {
             requestId,
           );
           throw new HttpException('Rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
+        }
+      }
+
+      // Check endpoint-specific rate limits
+      if (this.endpointRateLimitService) {
+        const endpointLimit = this.reflector.get<EndpointRateLimitOptions>(
+          ENDPOINT_RATE_LIMIT_KEY,
+          context.getHandler(),
+        );
+
+        if (endpointLimit) {
+          const endpointStatus = await this.endpointRateLimitService.checkEndpointLimit(
+            keyData.id,
+            path,
+            method,
+          );
+
+          if (endpointStatus && !endpointStatus.allowed) {
+            await this.auditLogService?.logFailure(
+              ipAddress,
+              method,
+              path,
+              'Endpoint rate limit exceeded',
+              keyData.id,
+              requestId,
+            );
+            throw new HttpException('Endpoint rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
+          }
+
+          // Set endpoint rate limit headers
+          if (endpointStatus) {
+            response.setHeader('X-Endpoint-RateLimit-Limit', endpointStatus.limit.toString());
+            response.setHeader(
+              'X-Endpoint-RateLimit-Remaining',
+              endpointStatus.remaining.toString(),
+            );
+            response.setHeader(
+              'X-Endpoint-RateLimit-Reset',
+              new Date(endpointStatus.resetAt).toISOString(),
+            );
+          }
         }
       }
 

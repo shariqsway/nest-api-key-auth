@@ -32,6 +32,35 @@ export function isIpAllowed(ipAddress: string, whitelist?: string[]): boolean {
 }
 
 /**
+ * Checks if an IP address matches any pattern in a blacklist.
+ * Supports the same patterns as whitelist:
+ * - Exact IP: "192.168.1.1"
+ * - CIDR notation: "192.168.1.0/24"
+ * - Wildcard: "192.168.*"
+ *
+ * @param ipAddress - The IP address to check
+ * @param blacklist - Array of blocked IP patterns
+ * @returns true if IP matches any pattern in blacklist, false otherwise
+ */
+export function isIpBlocked(ipAddress: string, blacklist?: string[]): boolean {
+  if (!blacklist || blacklist.length === 0) {
+    return false;
+  }
+
+  if (!ipAddress) {
+    return false;
+  }
+
+  for (const pattern of blacklist) {
+    if (matchesIpPattern(ipAddress, pattern)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Checks if an IP address matches a specific pattern.
  *
  * @param ipAddress - The IP address to check

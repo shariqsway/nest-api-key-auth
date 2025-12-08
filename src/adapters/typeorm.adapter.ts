@@ -26,6 +26,7 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
+    ipBlacklist?: string[]; // New: IP addresses/ranges to block
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -50,6 +51,7 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
         scopes: data.scopes,
         expiresAt: data.expiresAt || null,
         ipWhitelist: data.ipWhitelist || [],
+        ipBlacklist: data.ipBlacklist || [],
         rateLimitMax: data.rateLimitMax || null,
         rateLimitWindowMs: data.rateLimitWindowMs || null,
         quotaMax: data.quotaMax || null,
@@ -106,8 +108,11 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
     return this.mapToApiKey(apiKey);
   }
 
-  async revoke(id: string): Promise<ApiKey> {
-    await this.repository.update(id, { revokedAt: new Date() });
+  async revoke(id: string, reason?: string): Promise<ApiKey> {
+    await this.repository.update(id, {
+      revokedAt: new Date(),
+      revocationReason: reason || null,
+    });
     const apiKey = await this.repository.findOne({ where: { id } });
 
     if (!apiKey) {
@@ -307,8 +312,10 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
       scopes: entity.scopes || [],
       expiresAt: entity.expiresAt,
       revokedAt: entity.revokedAt,
+      revocationReason: entityAny.revocationReason || undefined,
       lastUsedAt: entity.lastUsedAt,
       ipWhitelist: entityAny.ipWhitelist || [],
+      ipBlacklist: entityAny.ipBlacklist || [],
       rateLimitMax: entityAny.rateLimitMax || undefined,
       rateLimitWindowMs: entityAny.rateLimitWindowMs || undefined,
       quotaMax: entityAny.quotaMax || undefined,

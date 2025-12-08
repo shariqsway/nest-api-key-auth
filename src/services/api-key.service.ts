@@ -65,6 +65,7 @@ export class ApiKeyService {
         scopes: dto.scopes || [],
         expiresAt: dto.expiresAt || null,
         ipWhitelist: dto.ipWhitelist || [],
+        ipBlacklist: dto.ipBlacklist || [],
         rateLimitMax: dto.rateLimitMax || null,
         rateLimitWindowMs: dto.rateLimitWindowMs || null,
         quotaMax: dto.quotaMax || null,
@@ -395,7 +396,7 @@ export class ApiKeyService {
    * console.log(`Revoked at: ${revokedKey.revokedAt}`);
    * ```
    */
-  async revoke(id: string): Promise<ApiKey> {
+  async revoke(id: string, reason?: string): Promise<ApiKey> {
     try {
       if (!id || typeof id !== 'string') {
         throw new BadRequestException('API key ID must be a non-empty string');
@@ -410,7 +411,7 @@ export class ApiKeyService {
         throw new ApiKeyAlreadyRevokedException(id);
       }
 
-      const revokedKey = await this.adapter.revoke(id);
+      const revokedKey = await this.adapter.revoke(id, reason);
       ApiKeyLogger.log(`API key revoked: ${id} (${revokedKey.name})`);
 
       if (this.cacheService) {

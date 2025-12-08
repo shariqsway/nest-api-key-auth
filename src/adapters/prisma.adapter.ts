@@ -62,6 +62,7 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
+    ipBlacklist?: string[]; // New: IP addresses/ranges to block
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -87,6 +88,7 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
           scopes: data.scopes,
           expiresAt: data.expiresAt || null,
           ipWhitelist: data.ipWhitelist || [],
+          ipBlacklist: data.ipBlacklist || [],
           rateLimitMax: data.rateLimitMax || null,
           rateLimitWindowMs: data.rateLimitWindowMs || null,
           quotaMax: data.quotaMax || null,
@@ -168,13 +170,17 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
    * Revokes an API key by setting its revokedAt timestamp.
    *
    * @param id - The API key ID to revoke
+   * @param reason - Optional reason for revocation
    * @returns The revoked API key
    */
-  async revoke(id: string): Promise<ApiKey> {
+  async revoke(id: string, reason?: string): Promise<ApiKey> {
     try {
       const apiKey = await this.prisma.apiKey.update({
         where: { id },
-        data: { revokedAt: new Date() },
+        data: {
+          revokedAt: new Date(),
+          revocationReason: reason || null,
+        },
       });
 
       return this.mapToApiKey(apiKey);
@@ -392,8 +398,10 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
       scopes: prismaKey.scopes || [],
       expiresAt: prismaKey.expiresAt,
       revokedAt: prismaKey.revokedAt,
+      revocationReason: prismaKey.revocationReason || undefined,
       lastUsedAt: prismaKey.lastUsedAt,
       ipWhitelist: prismaKey.ipWhitelist || [],
+      ipBlacklist: prismaKey.ipBlacklist || [],
       rateLimitMax: prismaKey.rateLimitMax || undefined,
       rateLimitWindowMs: prismaKey.rateLimitWindowMs || undefined,
       quotaMax: prismaKey.quotaMax || undefined,
