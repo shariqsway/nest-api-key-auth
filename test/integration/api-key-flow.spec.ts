@@ -2,27 +2,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ApiKeyModule } from '../../src/api-key.module';
 import { ApiKeyService } from '../../src/services/api-key.service';
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('API Key Flow Integration Tests', () => {
   let module: TestingModule;
   let apiKeyService: ApiKeyService;
   let mockAdapter: jest.Mocked<IApiKeyAdapter>;
 
-  const mockApiKey = {
+  const mockApiKey = createMockApiKey({
     id: 'test-key-123',
     name: 'Test Key',
     keyPrefix: 'abc12345',
     hashedKey: '$2b$10$hashedkeyhere',
     scopes: ['read:projects'],
-    expiresAt: null,
-    revokedAt: null,
-    lastUsedAt: null,
     ipWhitelist: [],
-    rateLimitMax: undefined,
-    rateLimitWindowMs: undefined,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  });
 
   beforeEach(async () => {
     mockAdapter = {
@@ -32,6 +26,11 @@ describe('API Key Flow Integration Tests', () => {
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       updateLastUsed: jest.fn(),
       updateQuotaUsage: jest.fn(),
       query: jest.fn(),

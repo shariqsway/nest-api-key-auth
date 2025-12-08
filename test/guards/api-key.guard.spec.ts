@@ -4,6 +4,7 @@ import { Reflector } from '@nestjs/core';
 import { ApiKeyGuard } from '../../src/guards/api-key.guard';
 import { ApiKeyService } from '../../src/services/api-key.service';
 import { ApiKeyModuleOptions } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('ApiKeyGuard', () => {
   let guard: ApiKeyGuard;
@@ -11,17 +12,11 @@ describe('ApiKeyGuard', () => {
   let mockContext: ExecutionContext;
   let mockGetRequest: jest.Mock;
 
-  const mockApiKey = {
+  const mockApiKey = createMockApiKey({
     id: '123',
     name: 'Test Key',
-    hashedKey: 'hashed',
     scopes: ['read:projects'],
-    expiresAt: null,
-    revokedAt: null,
-    lastUsedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  });
 
   beforeEach(async () => {
     apiKeyService = {

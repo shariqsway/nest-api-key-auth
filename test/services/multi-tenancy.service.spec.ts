@@ -3,6 +3,7 @@ import { MultiTenancyService } from '../../src/services/multi-tenancy.service';
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { API_KEY_ADAPTER } from '../../src/api-key.module';
 import { ApiKey } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('MultiTenancyService', () => {
   let service: MultiTenancyService;
@@ -12,19 +13,19 @@ describe('MultiTenancyService', () => {
     mockAdapter = {
       create: jest.fn(),
       findByKeyPrefix: jest.fn(),
-      findById: jest.fn().mockResolvedValue({
-        id: 'key-123',
-        name: 'Test Key',
-        keyPrefix: 'abc12345',
-        hashedKey: 'hash',
-        scopes: [],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as ApiKey),
+      findById: jest.fn().mockResolvedValue(
+        createMockApiKey({
+          id: 'key-123',
+          name: 'Test Key',
+          keyPrefix: 'abc12345',
+        }),
+      ),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       updateLastUsed: jest.fn(),

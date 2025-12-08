@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { KeyTestingService } from '../../src/services/key-testing.service';
 import { ApiKeyService } from '../../src/services/api-key.service';
 import { ApiKey } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('KeyTestingService', () => {
   let service: KeyTestingService;
@@ -39,18 +40,12 @@ describe('KeyTestingService', () => {
     });
 
     it('should return valid for active key', async () => {
-      const key: ApiKey = {
+      const key: ApiKey = createMockApiKey({
         id: 'key-123',
         name: 'Test Key',
         keyPrefix: 'abc12345',
-        hashedKey: 'hash',
         scopes: ['read'],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
       mockApiKeyService.validate.mockResolvedValue(key);
       const result = await service.testKey('valid-token');
       expect(result.valid).toBe(true);
@@ -58,18 +53,13 @@ describe('KeyTestingService', () => {
     });
 
     it('should detect revoked key', async () => {
-      const key: ApiKey = {
+      const key: ApiKey = createMockApiKey({
         id: 'key-123',
         name: 'Test Key',
         keyPrefix: 'abc12345',
-        hashedKey: 'hash',
-        scopes: [],
-        expiresAt: null,
+        state: 'revoked',
         revokedAt: new Date(),
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
       mockApiKeyService.validate.mockResolvedValue(key);
       const result = await service.testKey('revoked-token');
       expect(result.valid).toBe(false);
@@ -80,14 +70,12 @@ describe('KeyTestingService', () => {
   describe('testKeys', () => {
     it('should test multiple keys', async () => {
       mockApiKeyService.validate
-        .mockResolvedValueOnce({
-          id: 'key-1',
-          name: 'Key 1',
-          hashedKey: 'hash',
-          scopes: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as ApiKey)
+        .mockResolvedValueOnce(
+          createMockApiKey({
+            id: 'key-1',
+            name: 'Key 1',
+          }),
+        )
         .mockResolvedValueOnce(null);
 
       const results = await service.testKeys(['token-1', 'token-2']);

@@ -62,7 +62,7 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
-    ipBlacklist?: string[]; // New: IP addresses/ranges to block
+    ipBlacklist?: string[];
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -72,6 +72,9 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
     owner?: string | null;
     environment?: 'production' | 'staging' | 'development' | null;
     description?: string | null;
+    state?: string;
+    approvedAt?: Date | null;
+    expirationGracePeriodMs?: number | null;
   }): Promise<ApiKey> {
     try {
       const now = new Date();
@@ -100,6 +103,9 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
           owner: data.owner || null,
           environment: data.environment || null,
           description: data.description || null,
+          state: data.state || 'active',
+          approvedAt: data.approvedAt || null,
+          expirationGracePeriodMs: data.expirationGracePeriodMs || null,
         },
       });
 
@@ -180,6 +186,7 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
         data: {
           revokedAt: new Date(),
           revocationReason: reason || null,
+          state: 'revoked',
         },
       });
 
@@ -190,6 +197,104 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
         error instanceof Error ? error : String(error),
       );
       throw new InternalServerErrorException('Failed to revoke API key');
+    }
+  }
+
+  async suspend(id: string, _reason?: string): Promise<ApiKey> {
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: {
+          suspendedAt: new Date(),
+          state: 'suspended',
+        },
+      });
+
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error suspending key: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to suspend API key');
+    }
+  }
+
+  async unsuspend(id: string): Promise<ApiKey> {
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: {
+          suspendedAt: null,
+          state: 'active',
+        },
+      });
+
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error unsuspending key: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to unsuspend API key');
+    }
+  }
+
+  async restore(id: string): Promise<ApiKey> {
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: {
+          revokedAt: null,
+          revocationReason: null,
+          state: 'active',
+        },
+      });
+
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error restoring key: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to restore API key');
+    }
+  }
+
+  async approve(id: string): Promise<ApiKey> {
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: {
+          approvedAt: new Date(),
+          state: 'active',
+        },
+      });
+
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error approving key: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to approve API key');
+    }
+  }
+
+  async updateState(id: string, state: string): Promise<ApiKey> {
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: { state },
+      });
+
+      return this.mapToApiKey(apiKey);
+    } catch (error) {
+      ApiKeyLogger.error(
+        `Error updating state for key: ${id}`,
+        error instanceof Error ? error : String(error),
+      );
+      throw new InternalServerErrorException('Failed to update API key state');
     }
   }
 
@@ -286,6 +391,7 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
     environment?: 'production' | 'staging' | 'development';
     scopes?: string[];
     active?: boolean;
+    state?: string;
     createdAfter?: Date;
     createdBefore?: Date;
     lastUsedAfter?: Date;
@@ -312,9 +418,14 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
         where.scopes = { hasEvery: filters.scopes };
       }
 
+      if (filters.state) {
+        where.state = filters.state;
+      }
+
       if (filters.active !== undefined) {
         if (filters.active) {
           where.revokedAt = null;
+          where.state = { not: 'revoked' };
           where.OR = [{ expiresAt: null }, { expiresAt: { gt: new Date() } }];
         } else {
           where.OR = [{ revokedAt: { not: null } }, { expiresAt: { lte: new Date() } }];
@@ -399,6 +510,10 @@ export class PrismaAdapter implements IApiKeyAdapter, OnModuleInit, OnModuleDest
       expiresAt: prismaKey.expiresAt,
       revokedAt: prismaKey.revokedAt,
       revocationReason: prismaKey.revocationReason || undefined,
+      suspendedAt: prismaKey.suspendedAt || undefined,
+      state: (prismaKey.state as ApiKey['state']) || 'active',
+      approvedAt: prismaKey.approvedAt || undefined,
+      expirationGracePeriodMs: prismaKey.expirationGracePeriodMs || undefined,
       lastUsedAt: prismaKey.lastUsedAt,
       ipWhitelist: prismaKey.ipWhitelist || [],
       ipBlacklist: prismaKey.ipBlacklist || [],

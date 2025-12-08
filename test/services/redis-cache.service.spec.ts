@@ -1,23 +1,18 @@
 import { RedisCacheService } from '../../src/services/redis-cache.service';
 import { ApiKey } from '../../src/interfaces';
 import { RedisClient } from '../../src/types/redis.types';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('RedisCacheService', () => {
   let service: RedisCacheService;
   let mockRedisClient: jest.Mocked<RedisClient>;
 
-  const mockApiKey: ApiKey = {
+  const mockApiKey: ApiKey = createMockApiKey({
     id: 'key-123',
     name: 'Test Key',
     keyPrefix: 'abc12345',
-    hashedKey: 'hashed',
     scopes: ['read:projects'],
-    expiresAt: null,
-    revokedAt: null,
-    lastUsedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  });
 
   beforeEach(() => {
     mockRedisClient = {

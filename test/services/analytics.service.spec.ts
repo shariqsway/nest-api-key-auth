@@ -1,23 +1,19 @@
 import { AnalyticsService } from '../../src/services/analytics.service';
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { ApiKey } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
   let mockAdapter: jest.Mocked<IApiKeyAdapter>;
 
-  const mockApiKey: ApiKey = {
+  const mockApiKey: ApiKey = createMockApiKey({
     id: 'key-123',
     name: 'Test Key',
     keyPrefix: 'abc12345',
-    hashedKey: 'hashed',
     scopes: ['read:projects'],
-    expiresAt: null,
-    revokedAt: null,
     lastUsedAt: new Date(),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  });
 
   beforeEach(() => {
     mockAdapter = {
@@ -27,7 +23,14 @@ describe('AnalyticsService', () => {
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       updateLastUsed: jest.fn(),
+      updateQuotaUsage: jest.fn(),
+      query: jest.fn(),
     } as unknown as jest.Mocked<IApiKeyAdapter>;
 
     service = new AnalyticsService(mockAdapter);

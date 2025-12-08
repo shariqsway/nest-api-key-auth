@@ -55,6 +55,12 @@ import { KeyAliasService } from './services/key-alias.service';
 import { ComplianceService } from './services/compliance.service';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { GraphQLApiKeyGuard } from './guards/graphql-api-key.guard';
+import { KeySuspensionService } from './services/key-suspension.service';
+import { KeyApprovalService } from './services/key-approval.service';
+import { KeyRestoreService } from './services/key-restore.service';
+import { EndpointUsageAnalyticsService } from './services/endpoint-usage-analytics.service';
+import { EnhancedUsageStatisticsService } from './services/enhanced-usage-statistics.service';
+import { KeyLifecycleService } from './services/key-lifecycle.service';
 
 // These services are used in the module providers below
 import { RedisClient } from './types/redis.types';
@@ -456,6 +462,71 @@ export class ApiKeyModule {
         provide: RequestSigningService,
         useClass: RequestSigningService,
       },
+      {
+        provide: KeySuspensionService,
+        useFactory: (adapter: IApiKeyAdapter, webhookService?: WebhookService) => {
+          return new KeySuspensionService(adapter, webhookService);
+        },
+        inject: [
+          API_KEY_ADAPTER,
+          ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
+        ],
+      },
+      {
+        provide: KeyApprovalService,
+        useFactory: (adapter: IApiKeyAdapter, webhookService?: WebhookService) => {
+          return new KeyApprovalService(adapter, webhookService);
+        },
+        inject: [
+          API_KEY_ADAPTER,
+          ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
+        ],
+      },
+      {
+        provide: KeyRestoreService,
+        useFactory: (adapter: IApiKeyAdapter, webhookService?: WebhookService) => {
+          return new KeyRestoreService(adapter, webhookService);
+        },
+        inject: [
+          API_KEY_ADAPTER,
+          ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
+        ],
+      },
+      {
+        provide: EndpointUsageAnalyticsService,
+        useFactory: (adapter: IApiKeyAdapter, auditLogService?: AuditLogService) => {
+          return new EndpointUsageAnalyticsService(adapter, auditLogService);
+        },
+        inject: [
+          API_KEY_ADAPTER,
+          ...(defaultOptions.enableAuditLogging !== false ? [AUDIT_LOG_SERVICE_TOKEN] : []),
+        ],
+      },
+      {
+        provide: EnhancedUsageStatisticsService,
+        useFactory: (
+          adapter: IApiKeyAdapter,
+          auditLogService?: AuditLogService,
+          analyticsService?: AnalyticsService,
+        ) => {
+          return new EnhancedUsageStatisticsService(adapter, auditLogService, analyticsService);
+        },
+        inject: [
+          API_KEY_ADAPTER,
+          ...(defaultOptions.enableAuditLogging !== false ? [AUDIT_LOG_SERVICE_TOKEN] : []),
+          ...(defaultOptions.enableAnalytics !== false ? [ANALYTICS_SERVICE_TOKEN] : []),
+        ],
+      },
+      {
+        provide: KeyLifecycleService,
+        useFactory: (adapter: IApiKeyAdapter, webhookService?: WebhookService) => {
+          return new KeyLifecycleService(adapter, webhookService);
+        },
+        inject: [
+          API_KEY_ADAPTER,
+          ...(defaultOptions.enableWebhooks !== false ? [WEBHOOK_SERVICE_TOKEN] : []),
+        ],
+      },
     );
 
     const moduleExports: Array<
@@ -469,13 +540,31 @@ export class ApiKeyModule {
       | typeof KeyTemplateService
       | typeof ExportImportService
       | typeof RequestSigningService
+      | typeof KeySuspensionService
+      | typeof KeyApprovalService
+      | typeof KeyRestoreService
+      | typeof EndpointUsageAnalyticsService
+      | typeof EnhancedUsageStatisticsService
+      | typeof KeyLifecycleService
       | string
       | typeof CacheService
       | typeof RateLimitService
       | typeof AuditLogService
       | typeof AnalyticsService
       | typeof WebhookService
-    > = [ApiKeyService, ApiKeyGuard, ScopesGuard, HealthService, API_KEY_ADAPTER];
+    > = [
+      ApiKeyService,
+      ApiKeyGuard,
+      ScopesGuard,
+      HealthService,
+      API_KEY_ADAPTER,
+      KeySuspensionService,
+      KeyApprovalService,
+      KeyRestoreService,
+      EndpointUsageAnalyticsService,
+      EnhancedUsageStatisticsService,
+      KeyLifecycleService,
+    ];
 
     // Add optional services to exports
     if (defaultOptions.enableCaching !== false) {

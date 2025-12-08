@@ -7,32 +7,37 @@ datasource db {
 }
 
 model ApiKey {
-  id               String   @id @default(cuid())
-  name             String
-  keyPrefix        String
-  hashedKey        String
-  scopes           String[] @default([])
-  expiresAt        DateTime?
-  revokedAt        DateTime?
-  revocationReason String?  @db.Text // Reason for revocation
-  lastUsedAt       DateTime?
-  ipWhitelist      String[] @default([])
-  ipBlacklist      String[] @default([]) // IP addresses/ranges to block
-  rateLimitMax     Int?
-  rateLimitWindowMs Int?
-  quotaMax         Int?                       // Usage quota maximum
-  quotaPeriod      String?                   // 'daily' | 'monthly' | 'yearly'
-  quotaUsed        Int       @default(0)     // Current usage count
-  quotaResetAt     DateTime?                 // When quota resets
-  metadata         Json?                     // Custom metadata JSON
-  tags             String[] @default([])     // Tags for organization
-  owner            String?                   // Owner/creator identifier
-  environment      String?                   // 'production' | 'staging' | 'development'
-  description      String? @db.Text          // Optional description
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  name                    String
+  keyPrefix               String
+  hashedKey               String
+  scopes                  String[] @default([])
+  expiresAt               DateTime?
+  revokedAt               DateTime?
+  revocationReason        String?  @db.Text // Reason for revocation
+  suspendedAt             DateTime?        // When key was suspended
+  state                   String   @default("active") // 'pending', 'active', 'suspended', 'expired', 'revoked'
+  approvedAt              DateTime?        // When key was approved (for approval workflow)
+  expirationGracePeriodMs Int?              // Grace period in ms after expiration
+  lastUsedAt              DateTime?
+  ipWhitelist             String[] @default([])
+  ipBlacklist             String[] @default([]) // IP addresses/ranges to block
+  rateLimitMax            Int?
+  rateLimitWindowMs       Int?
+  quotaMax                Int?                       // Usage quota maximum
+  quotaPeriod             String?                   // 'daily' | 'monthly' | 'yearly'
+  quotaUsed               Int       @default(0)     // Current usage count
+  quotaResetAt            DateTime?                 // When quota resets
+  metadata                Json?                     // Custom metadata JSON
+  tags                    String[] @default([])     // Tags for organization
+  owner                   String?                   // Owner/creator identifier
+  environment             String?                   // 'production' | 'staging' | 'development'
+  description             String? @db.Text          // Optional description
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  auditLogs        AuditLog[]
+  auditLogs               AuditLog[]
+  endpointUsage           EndpointUsage[]
 
   @@unique([keyPrefix, hashedKey])
   @@index([keyPrefix])
@@ -40,6 +45,7 @@ model ApiKey {
   @@index([tags])
   @@index([owner])
   @@index([environment])
+  @@index([state])
   @@map("api_keys")
 }
 
@@ -63,5 +69,24 @@ model AuditLog {
   @@index([success])
   @@index([ipAddress])
   @@map("audit_logs")
+}
+
+model EndpointUsage {
+  id          String   @id @default(cuid())
+  keyId       String
+  endpoint    String   // Route/endpoint path
+  method      String   // HTTP method
+  count       Int      @default(1) // Usage count
+  lastUsedAt  DateTime @default(now())
+  period      String   // 'hour', 'day', 'month'
+  periodStart DateTime // Start of the period
+
+  apiKey      ApiKey   @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@index([keyId])
+  @@index([endpoint])
+  @@index([period, periodStart])
+  @@unique([keyId, endpoint, method, period, periodStart])
+  @@map("endpoint_usage")
 }
 

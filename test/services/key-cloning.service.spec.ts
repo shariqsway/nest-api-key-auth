@@ -4,6 +4,7 @@ import { ApiKeyService } from '../../src/services/api-key.service';
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { API_KEY_ADAPTER } from '../../src/api-key.module';
 import { ApiKey } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('KeyCloningService', () => {
   let service: KeyCloningService;
@@ -14,20 +15,21 @@ describe('KeyCloningService', () => {
     mockAdapter = {
       create: jest.fn(),
       findByKeyPrefix: jest.fn(),
-      findById: jest.fn().mockResolvedValue({
-        id: 'key-123',
-        name: 'Source Key',
-        keyPrefix: 'abc12345',
-        hashedKey: 'hash',
-        scopes: ['read', 'write'],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        ipWhitelist: ['192.168.1.1'],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as ApiKey),
+      findById: jest.fn().mockResolvedValue(
+        createMockApiKey({
+          id: 'key-123',
+          name: 'Source Key',
+          keyPrefix: 'abc12345',
+          scopes: ['read', 'write'],
+          ipWhitelist: ['192.168.1.1'],
+        }),
+      ),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       updateLastUsed: jest.fn(),

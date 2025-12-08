@@ -1,3 +1,5 @@
+export type ApiKeyState = 'pending' | 'active' | 'suspended' | 'expired' | 'revoked';
+
 export interface ApiKey {
   id: string;
   name: string;
@@ -6,10 +8,14 @@ export interface ApiKey {
   scopes: string[];
   expiresAt: Date | null;
   revokedAt: Date | null;
-  revocationReason?: string | null; // New: Reason for revocation
+  revocationReason?: string | null;
+  suspendedAt?: Date | null;
+  state: ApiKeyState;
+  approvedAt?: Date | null;
+  expirationGracePeriodMs?: number | null;
   lastUsedAt: Date | null;
   ipWhitelist?: string[];
-  ipBlacklist?: string[]; // New: IP addresses/ranges to block
+  ipBlacklist?: string[];
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
   quotaMax?: number | null;
@@ -30,7 +36,7 @@ export interface CreateApiKeyDto {
   scopes?: string[];
   expiresAt?: Date;
   ipWhitelist?: string[];
-  ipBlacklist?: string[]; // New: IP addresses/ranges to block
+  ipBlacklist?: string[];
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
   quotaMax?: number;
@@ -40,6 +46,9 @@ export interface CreateApiKeyDto {
   owner?: string;
   environment?: 'production' | 'staging' | 'development';
   description?: string;
+  state?: ApiKeyState;
+  requiresApproval?: boolean;
+  expirationGracePeriodMs?: number;
 }
 
 export interface CreateApiKeyResponse {
@@ -87,4 +96,6 @@ export interface ApiKeyModuleOptions {
   webhooks?: WebhookConfig[];
   typeOrmAuditLogRepository?: TypeOrmAuditLogRepository;
   mongooseAuditLogModel?: MongooseAuditLogModel;
+  defaultExpirationGracePeriodMs?: number;
+  requireApproval?: boolean;
 }

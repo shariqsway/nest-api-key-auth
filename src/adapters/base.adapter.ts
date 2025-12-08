@@ -18,7 +18,7 @@ export interface IApiKeyAdapter {
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
-    ipBlacklist?: string[]; // New: IP addresses/ranges to block
+    ipBlacklist?: string[];
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -28,6 +28,9 @@ export interface IApiKeyAdapter {
     owner?: string | null;
     environment?: 'production' | 'staging' | 'development' | null;
     description?: string | null;
+    state?: string;
+    approvedAt?: Date | null;
+    expirationGracePeriodMs?: number | null;
   }): Promise<ApiKey>;
 
   /**
@@ -54,6 +57,48 @@ export interface IApiKeyAdapter {
    * @returns The revoked API key
    */
   revoke(id: string, reason?: string): Promise<ApiKey>;
+
+  /**
+   * Suspends an API key temporarily.
+   *
+   * @param id - The API key ID to suspend
+   * @param reason - Optional reason for suspension
+   * @returns The suspended API key
+   */
+  suspend(id: string, reason?: string): Promise<ApiKey>;
+
+  /**
+   * Unsuspends an API key.
+   *
+   * @param id - The API key ID to unsuspend
+   * @returns The unsuspended API key
+   */
+  unsuspend(id: string): Promise<ApiKey>;
+
+  /**
+   * Restores a revoked API key.
+   *
+   * @param id - The API key ID to restore
+   * @returns The restored API key
+   */
+  restore(id: string): Promise<ApiKey>;
+
+  /**
+   * Approves a pending API key.
+   *
+   * @param id - The API key ID to approve
+   * @returns The approved API key
+   */
+  approve(id: string): Promise<ApiKey>;
+
+  /**
+   * Updates the state of an API key.
+   *
+   * @param id - The API key ID
+   * @param state - The new state
+   * @returns The updated API key
+   */
+  updateState(id: string, state: string): Promise<ApiKey>;
 
   /**
    * Retrieves all API keys from the database, including revoked ones.
@@ -99,6 +144,7 @@ export interface IApiKeyAdapter {
     environment?: 'production' | 'staging' | 'development';
     scopes?: string[];
     active?: boolean;
+    state?: string;
     createdAfter?: Date;
     createdBefore?: Date;
     lastUsedAfter?: Date;

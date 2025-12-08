@@ -26,7 +26,7 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
-    ipBlacklist?: string[]; // New: IP addresses/ranges to block
+    ipBlacklist?: string[];
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -36,6 +36,9 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
     owner?: string | null;
     environment?: 'production' | 'staging' | 'development' | null;
     description?: string | null;
+    state?: string;
+    approvedAt?: Date | null;
+    expirationGracePeriodMs?: number | null;
   }): Promise<ApiKey> {
     try {
       const now = new Date();
@@ -63,6 +66,9 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
         owner: data.owner || null,
         environment: data.environment || null,
         description: data.description || null,
+        state: data.state || 'active',
+        approvedAt: data.approvedAt || null,
+        expirationGracePeriodMs: data.expirationGracePeriodMs || null,
       };
 
       const apiKey = this.repository.create(apiKeyData);
@@ -112,11 +118,80 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
     await this.repository.update(id, {
       revokedAt: new Date(),
       revocationReason: reason || null,
+      state: 'revoked',
     });
     const apiKey = await this.repository.findOne({ where: { id } });
 
     if (!apiKey) {
       throw new Error(`API key with ID ${id} not found after revocation`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async suspend(id: string, _reason?: string): Promise<ApiKey> {
+    await this.repository.update(id, {
+      suspendedAt: new Date(),
+      state: 'suspended',
+    });
+    const apiKey = await this.repository.findOne({ where: { id } });
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found after suspension`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async unsuspend(id: string): Promise<ApiKey> {
+    await this.repository.update(id, {
+      suspendedAt: null,
+      state: 'active',
+    });
+    const apiKey = await this.repository.findOne({ where: { id } });
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found after unsuspension`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async restore(id: string): Promise<ApiKey> {
+    await this.repository.update(id, {
+      revokedAt: null,
+      revocationReason: null,
+      state: 'active',
+    });
+    const apiKey = await this.repository.findOne({ where: { id } });
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found after restoration`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async approve(id: string): Promise<ApiKey> {
+    await this.repository.update(id, {
+      approvedAt: new Date(),
+      state: 'active',
+    });
+    const apiKey = await this.repository.findOne({ where: { id } });
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found after approval`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async updateState(id: string, state: string): Promise<ApiKey> {
+    await this.repository.update(id, { state });
+    const apiKey = await this.repository.findOne({ where: { id } });
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found after state update`);
     }
 
     return this.mapToApiKey(apiKey);
@@ -177,6 +252,7 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
     environment?: 'production' | 'staging' | 'development';
     scopes?: string[];
     active?: boolean;
+    state?: string;
     createdAfter?: Date;
     createdBefore?: Date;
     lastUsedAfter?: Date;
@@ -205,9 +281,14 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
         queryBuilder.andWhere('apiKey.scopes && :scopes', { scopes: filters.scopes });
       }
 
+      if (filters.state) {
+        queryBuilder.andWhere('apiKey.state = :state', { state: filters.state });
+      }
+
       if (filters.active !== undefined) {
         if (filters.active) {
           queryBuilder.andWhere('apiKey.revokedAt IS NULL');
+          queryBuilder.andWhere('apiKey.state != :revokedState', { revokedState: 'revoked' });
           queryBuilder.andWhere('(apiKey.expiresAt IS NULL OR apiKey.expiresAt > :now)', {
             now: new Date(),
           });
@@ -290,6 +371,10 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
       owner?: string | null;
       environment?: string | null;
       description?: string | null;
+      suspendedAt?: Date | null;
+      state?: string;
+      approvedAt?: Date | null;
+      expirationGracePeriodMs?: number | null;
     };
 
     let metadata: Record<string, unknown> | undefined = undefined;
@@ -313,6 +398,10 @@ export class TypeOrmAdapter implements IApiKeyAdapter {
       expiresAt: entity.expiresAt,
       revokedAt: entity.revokedAt,
       revocationReason: entityAny.revocationReason || undefined,
+      suspendedAt: entityAny.suspendedAt || undefined,
+      state: (entityAny.state as ApiKey['state']) || 'active',
+      approvedAt: entityAny.approvedAt || undefined,
+      expirationGracePeriodMs: entityAny.expirationGracePeriodMs || undefined,
       lastUsedAt: entity.lastUsedAt,
       ipWhitelist: entityAny.ipWhitelist || [],
       ipBlacklist: entityAny.ipBlacklist || [],

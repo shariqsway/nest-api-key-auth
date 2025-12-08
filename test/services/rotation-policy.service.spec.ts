@@ -4,27 +4,22 @@ import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { ApiKeyService } from '../../src/services/api-key.service';
 import { ApiKey } from '../../src/interfaces';
 import { API_KEY_ADAPTER } from '../../src/api-key.module';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('RotationPolicyService', () => {
   let service: RotationPolicyService;
   let mockAdapter: jest.Mocked<IApiKeyAdapter>;
   let mockApiKeyService: jest.Mocked<ApiKeyService>;
 
-  const mockApiKey: ApiKey = {
+  const mockApiKey: ApiKey = createMockApiKey({
     id: 'key-123',
     name: 'Test Key',
     keyPrefix: 'abc12345',
-    hashedKey: 'hashed',
     scopes: ['read:projects'],
-    expiresAt: null,
-    revokedAt: null,
-    lastUsedAt: null,
     tags: ['production'],
     owner: 'user1',
     environment: 'production',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  });
 
   beforeEach(async () => {
     mockAdapter = {
@@ -34,6 +29,11 @@ describe('RotationPolicyService', () => {
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       updateLastUsed: jest.fn(),
       updateQuotaUsage: jest.fn(),
       query: jest.fn(),

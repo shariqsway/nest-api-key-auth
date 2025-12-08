@@ -2,24 +2,20 @@ import { ExpirationNotificationService } from '../../src/services/expiration-not
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { WebhookService } from '../../src/services/webhook.service';
 import { ApiKey } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('ExpirationNotificationService', () => {
   let service: ExpirationNotificationService;
   let mockAdapter: jest.Mocked<IApiKeyAdapter>;
   let mockWebhookService: jest.Mocked<WebhookService>;
 
-  const createMockKey = (id: string, expiresAt: Date | null): ApiKey => ({
-    id,
-    name: `Key ${id}`,
-    keyPrefix: 'abc',
-    hashedKey: 'hashed',
-    scopes: [],
-    expiresAt,
-    revokedAt: null,
-    lastUsedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  const createMockKey = (id: string, expiresAt: Date | null): ApiKey =>
+    createMockApiKey({
+      id,
+      name: `Key ${id}`,
+      keyPrefix: 'abc',
+      expiresAt,
+    });
 
   beforeEach(() => {
     mockAdapter = {
@@ -29,7 +25,14 @@ describe('ExpirationNotificationService', () => {
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       updateLastUsed: jest.fn(),
+      updateQuotaUsage: jest.fn(),
+      query: jest.fn(),
     } as unknown as jest.Mocked<IApiKeyAdapter>;
 
     mockWebhookService = {

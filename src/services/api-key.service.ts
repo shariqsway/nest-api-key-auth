@@ -58,6 +58,9 @@ export class ApiKeyService {
         bcryptRounds: 10,
       });
 
+      // Determine initial state
+      const initialState = dto.requiresApproval ? 'pending' : dto.state || 'active';
+
       const apiKey = await this.adapter.create({
         name: dto.name,
         keyPrefix,
@@ -75,6 +78,9 @@ export class ApiKeyService {
         owner: dto.owner || null,
         environment: dto.environment || null,
         description: dto.description || null,
+        state: initialState,
+        approvedAt: initialState === 'active' ? new Date() : null,
+        expirationGracePeriodMs: dto.expirationGracePeriodMs || null,
       });
 
       if (this.cacheService) {
@@ -176,14 +182,38 @@ export class ApiKeyService {
           const algorithm = HashUtil.detectAlgorithm(apiKey.hashedKey);
           const isValid = await HashUtil.compare(token, apiKey.hashedKey, algorithm);
           if (isValid) {
-            if (apiKey.revokedAt) {
+            // Check state
+            if (apiKey.state === 'revoked' || apiKey.revokedAt) {
               ApiKeyLogger.warn(`Revoked key attempted: ${apiKey.id}`);
               return null;
             }
 
-            if (apiKey.expiresAt && apiKey.expiresAt <= now) {
-              ApiKeyLogger.warn(`Expired key attempted: ${apiKey.id}`);
+            if (apiKey.state === 'suspended' || apiKey.suspendedAt) {
+              ApiKeyLogger.warn(`Suspended key attempted: ${apiKey.id}`);
               return null;
+            }
+
+            if (apiKey.state === 'pending') {
+              ApiKeyLogger.warn(`Pending key attempted (not approved): ${apiKey.id}`);
+              return null;
+            }
+
+            // Check expiration with grace period
+            if (apiKey.expiresAt) {
+              const expirationTime = apiKey.expiresAt.getTime();
+              const gracePeriodMs = apiKey.expirationGracePeriodMs || 0;
+              const effectiveExpirationTime = expirationTime + gracePeriodMs;
+
+              if (now.getTime() > effectiveExpirationTime) {
+                ApiKeyLogger.warn(`Expired key attempted (grace period exceeded): ${apiKey.id}`);
+                return null;
+              }
+
+              // Update state to expired if past expiration (but within grace period)
+              if (now.getTime() > expirationTime && apiKey.state !== 'expired') {
+                await this.adapter.updateState(apiKey.id, 'expired');
+                apiKey.state = 'expired';
+              }
             }
 
             ApiKeyLogger.debug(`Valid key found: ${apiKey.id} (${apiKey.name})`);

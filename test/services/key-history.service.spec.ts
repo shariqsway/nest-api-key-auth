@@ -3,6 +3,7 @@ import { KeyHistoryService } from '../../src/services/key-history.service';
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { API_KEY_ADAPTER } from '../../src/api-key.module';
 import { ApiKey } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('KeyHistoryService', () => {
   let service: KeyHistoryService;
@@ -14,6 +15,11 @@ describe('KeyHistoryService', () => {
       findByKeyPrefix: jest.fn(),
       findById: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       updateLastUsed: jest.fn(),
@@ -91,18 +97,11 @@ describe('KeyHistoryService', () => {
   describe('recordCreation', () => {
     it('should record key creation', async () => {
       const keyId = 'key-123';
-      const key: ApiKey = {
+      const key: ApiKey = createMockApiKey({
         id: keyId,
         name: 'Test Key',
         keyPrefix: 'abc12345',
-        hashedKey: 'hash',
-        scopes: [],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
       await service.recordCreation(keyId, key, 'user-1');
       const history = await service.getKeyHistory(keyId);
       expect(history[0].action).toBe('created');

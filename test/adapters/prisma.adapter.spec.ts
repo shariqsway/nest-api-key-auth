@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaAdapter, PRISMA_CLIENT_KEY } from '../../src/adapters/prisma.adapter';
 import { PrismaClient } from '@prisma/client';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('PrismaAdapter', () => {
   let adapter: PrismaAdapter;
@@ -34,18 +35,12 @@ describe('PrismaAdapter', () => {
 
   describe('create', () => {
     it('should create an API key', async () => {
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test',
         keyPrefix: 'abc12345',
-        hashedKey: 'hashed',
         scopes: ['read:projects'],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       (mockPrisma.apiKey.create as jest.Mock).mockResolvedValue(mockKey);
 
@@ -65,18 +60,11 @@ describe('PrismaAdapter', () => {
   describe('findByKeyPrefix', () => {
     it('should find keys by prefix', async () => {
       const mockKeys = [
-        {
+        createMockApiKey({
           id: '123',
           name: 'Test',
           keyPrefix: 'abc12345',
-          hashedKey: 'hashed',
-          scopes: [],
-          expiresAt: null,
-          revokedAt: null,
-          lastUsedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
+        }),
       ];
 
       (mockPrisma.apiKey.findMany as jest.Mock).mockResolvedValue(mockKeys);
@@ -91,18 +79,11 @@ describe('PrismaAdapter', () => {
 
   describe('findById', () => {
     it('should find key by ID', async () => {
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test',
         keyPrefix: 'abc12345',
-        hashedKey: 'hashed',
-        scopes: [],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       (mockPrisma.apiKey.findUnique as jest.Mock).mockResolvedValue(mockKey);
 
@@ -123,18 +104,13 @@ describe('PrismaAdapter', () => {
 
   describe('revoke', () => {
     it('should revoke a key', async () => {
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test',
         keyPrefix: 'abc12345',
-        hashedKey: 'hashed',
-        scopes: [],
-        expiresAt: null,
+        state: 'revoked',
         revokedAt: new Date(),
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       (mockPrisma.apiKey.update as jest.Mock).mockResolvedValue(mockKey);
 

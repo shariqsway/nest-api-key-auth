@@ -16,6 +16,12 @@ export type WebhookEvent =
   | 'key.expired'
   | 'key.expiring'
   | 'key.updated'
+  | 'key.suspended'
+  | 'key.unsuspended'
+  | 'key.approved'
+  | 'key.rejected'
+  | 'key.restored'
+  | 'key.archived'
   | 'threat.detected';
 
 export interface WebhookPayload {

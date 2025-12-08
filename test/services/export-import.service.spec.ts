@@ -3,42 +3,37 @@ import { ExportImportService } from '../../src/services/export-import.service';
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { ApiKey } from '../../src/interfaces';
 import { API_KEY_ADAPTER } from '../../src/api-key.module';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('ExportImportService', () => {
   let service: ExportImportService;
   let mockAdapter: jest.Mocked<IApiKeyAdapter>;
 
   const mockApiKeys: ApiKey[] = [
-    {
+    createMockApiKey({
       id: 'key-1',
       name: 'Key 1',
       keyPrefix: 'abc12345',
-      hashedKey: 'hashed1',
       scopes: ['read:projects'],
-      expiresAt: null,
-      revokedAt: null,
       lastUsedAt: new Date('2024-01-01'),
       tags: ['production'],
       owner: 'user1',
       environment: 'production',
       createdAt: new Date('2024-01-01'),
       updatedAt: new Date('2024-01-01'),
-    },
-    {
+    }),
+    createMockApiKey({
       id: 'key-2',
       name: 'Key 2',
       keyPrefix: 'def67890',
-      hashedKey: 'hashed2',
       scopes: ['write:projects'],
       expiresAt: new Date('2025-12-31'),
-      revokedAt: null,
-      lastUsedAt: null,
       tags: ['staging'],
       owner: 'user2',
       environment: 'staging',
       createdAt: new Date('2024-01-02'),
       updatedAt: new Date('2024-01-02'),
-    },
+    }),
   ];
 
   beforeEach(async () => {
@@ -49,6 +44,11 @@ describe('ExportImportService', () => {
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       updateLastUsed: jest.fn(),
       updateQuotaUsage: jest.fn(),
       query: jest.fn(),
@@ -224,18 +224,14 @@ describe('ExportImportService', () => {
         },
       ];
 
-      mockAdapter.create.mockResolvedValue({
-        id: 'valid-key',
-        name: 'Valid Key',
-        keyPrefix: 'valid123',
-        hashedKey: 'hashed',
-        scopes: ['read:projects'],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      mockAdapter.create.mockResolvedValue(
+        createMockApiKey({
+          id: 'valid-key',
+          name: 'Valid Key',
+          keyPrefix: 'valid123',
+          scopes: ['read:projects'],
+        }),
+      );
 
       const result = await service.importKeys(JSON.stringify(importData));
 

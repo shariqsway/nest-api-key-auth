@@ -1390,6 +1390,127 @@ const key = await apiKeyService.create({
 
 **Note:** If an IP is in both whitelist and blacklist, it will be blocked (blacklist takes precedence).
 
+### Key Suspension
+
+Temporarily suspend API keys without revoking them:
+
+```typescript
+import { KeySuspensionService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly suspensionService: KeySuspensionService) {}
+
+  async suspendKey(keyId: string, reason?: string) {
+    const suspended = await this.suspensionService.suspend(keyId, reason);
+    return suspended; // Key state is now 'suspended'
+  }
+
+  async unsuspendKey(keyId: string) {
+    const active = await this.suspensionService.unsuspend(keyId);
+    return active; // Key state is now 'active'
+  }
+
+  async getSuspendedKeys() {
+    return await this.suspensionService.getSuspendedKeys();
+  }
+}
+```
+
+**Features:**
+- Temporarily disable keys without permanent revocation
+- Track suspension reason
+- Easy unsuspension when needed
+- Suspended keys are automatically rejected by guards
+
+### Key Restore/Unrevoke
+
+Restore previously revoked API keys:
+
+```typescript
+import { KeyRestoreService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly restoreService: KeyRestoreService) {}
+
+  async restoreKey(keyId: string) {
+    const restored = await this.restoreService.restore(keyId);
+    return restored; // Key is now active again
+  }
+
+  async getRevokedKeys() {
+    return await this.restoreService.getRevokedKeys();
+  }
+}
+```
+
+**Note:** Only revoked keys can be restored. Suspended or expired keys must be unsuspended or recreated.
+
+### Key Approval Workflow
+
+Require approval before API keys become active:
+
+```typescript
+import { KeyApprovalService } from 'nest-api-key-auth';
+
+@Injectable()
+export class AppService {
+  constructor(
+    private readonly apiKeyService: ApiKeyService,
+    private readonly approvalService: KeyApprovalService,
+  ) {}
+
+  async createPendingKey(name: string) {
+    // Create key in 'pending' state
+    const key = await this.apiKeyService.create({
+      name,
+      requiresApproval: true, // Key will be created in 'pending' state
+    });
+    return key; // State is 'pending'
+  }
+
+  async approveKey(keyId: string) {
+    const approved = await this.approvalService.approve(keyId);
+    return approved; // State is now 'active'
+  }
+
+  async rejectKey(keyId: string, reason?: string) {
+    const rejected = await this.approvalService.reject(keyId, reason);
+    return rejected; // Key is revoked
+  }
+
+  async getPendingKeys() {
+    return await this.approvalService.getPendingKeys();
+  }
+}
+```
+
+**Configuration:**
+```typescript
+ApiKeyModule.register({
+  requireApproval: true, // All new keys require approval by default
+});
+```
+
+### Expiration Grace Period
+
+Allow keys to work for a grace period after expiration:
+
+```typescript
+const key = await apiKeyService.create({
+  name: 'My Key',
+  expiresAt: new Date('2024-12-31'),
+  expirationGracePeriodMs: 7 * 24 * 60 * 60 * 1000, // 7 days grace period
+});
+```
+
+**Features:**
+- Keys continue working during grace period
+- State automatically transitions to 'expired' after expiration
+- Grace period is configurable per key or globally
+- Useful for gradual key rotation
+
 ### Revocation Reason Tracking
 
 Track the reason for API key revocation:

@@ -3,6 +3,7 @@ import { ApiKeyService } from '../src/services/api-key.service';
 import { IApiKeyAdapter } from '../src/adapters/base.adapter';
 import { BadRequestException } from '@nestjs/common';
 import { ApiKeyNotFoundException, ApiKeyAlreadyRevokedException } from '../src/exceptions';
+import { createMockApiKey } from './helpers/api-key.helper';
 
 describe('ApiKeyService', () => {
   let service: ApiKeyService;
@@ -14,6 +15,11 @@ describe('ApiKeyService', () => {
     findAll: jest.fn(),
     findAllActive: jest.fn(),
     revoke: jest.fn(),
+    suspend: jest.fn(),
+    unsuspend: jest.fn(),
+    restore: jest.fn(),
+    approve: jest.fn(),
+    updateState: jest.fn(),
     updateLastUsed: jest.fn(),
     updateQuotaUsage: jest.fn(),
     query: jest.fn(),
@@ -27,17 +33,11 @@ describe('ApiKeyService', () => {
   describe('create', () => {
     it('should create an API key with valid data', async () => {
       const dto = { name: 'Test Key', scopes: ['read:projects'] };
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test Key',
-        hashedKey: 'hashed',
         scopes: ['read:projects'],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       mockAdapter.create.mockResolvedValue(mockKey);
 
@@ -81,17 +81,12 @@ describe('ApiKeyService', () => {
     });
 
     it('should return null for revoked key', async () => {
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test',
-        hashedKey: 'hashed',
-        scopes: [],
-        expiresAt: null,
+        state: 'revoked',
         revokedAt: new Date(),
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       mockAdapter.findByKeyPrefix.mockResolvedValue([mockKey]);
 
@@ -103,17 +98,10 @@ describe('ApiKeyService', () => {
 
   describe('findById', () => {
     it('should return API key when found', async () => {
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test',
-        hashedKey: 'hashed',
-        scopes: [],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       mockAdapter.findById.mockResolvedValue(mockKey);
 
@@ -131,19 +119,12 @@ describe('ApiKeyService', () => {
 
   describe('revoke', () => {
     it('should revoke an active key', async () => {
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test',
-        hashedKey: 'hashed',
-        scopes: [],
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
-      const revokedKey = { ...mockKey, revokedAt: new Date() };
+      const revokedKey = { ...mockKey, revokedAt: new Date(), state: 'revoked' as const };
 
       mockAdapter.findById.mockResolvedValue(mockKey);
       mockAdapter.revoke.mockResolvedValue(revokedKey);
@@ -154,17 +135,12 @@ describe('ApiKeyService', () => {
     });
 
     it('should throw ApiKeyAlreadyRevokedException for already revoked key', async () => {
-      const mockKey = {
+      const mockKey = createMockApiKey({
         id: '123',
         name: 'Test',
-        hashedKey: 'hashed',
-        scopes: [],
-        expiresAt: null,
+        state: 'revoked',
         revokedAt: new Date(),
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       mockAdapter.findById.mockResolvedValue(mockKey);
 

@@ -21,7 +21,7 @@ export class MongooseAdapter implements IApiKeyAdapter {
     scopes: string[];
     expiresAt?: Date | null;
     ipWhitelist?: string[];
-    ipBlacklist?: string[]; // New: IP addresses/ranges to block
+    ipBlacklist?: string[];
     rateLimitMax?: number | null;
     rateLimitWindowMs?: number | null;
     quotaMax?: number | null;
@@ -31,6 +31,9 @@ export class MongooseAdapter implements IApiKeyAdapter {
     owner?: string | null;
     environment?: 'production' | 'staging' | 'development' | null;
     description?: string | null;
+    state?: string;
+    approvedAt?: Date | null;
+    expirationGracePeriodMs?: number | null;
   }): Promise<ApiKey> {
     try {
       const now = new Date();
@@ -58,6 +61,9 @@ export class MongooseAdapter implements IApiKeyAdapter {
         owner: data.owner || null,
         environment: data.environment || null,
         description: data.description || null,
+        state: data.state || 'active',
+        approvedAt: data.approvedAt || null,
+        expirationGracePeriodMs: data.expirationGracePeriodMs || null,
       });
 
       const saved = await apiKey.save();
@@ -103,9 +109,75 @@ export class MongooseAdapter implements IApiKeyAdapter {
   async revoke(id: string, reason?: string): Promise<ApiKey> {
     const apiKey = await this.model.findByIdAndUpdate(
       id,
-      { revokedAt: new Date(), revocationReason: reason || null },
+      { revokedAt: new Date(), revocationReason: reason || null, state: 'revoked' },
       { new: true },
     );
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async suspend(id: string, _reason?: string): Promise<ApiKey> {
+    const apiKey = await this.model.findByIdAndUpdate(
+      id,
+      { suspendedAt: new Date(), state: 'suspended' },
+      { new: true },
+    );
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async unsuspend(id: string): Promise<ApiKey> {
+    const apiKey = await this.model.findByIdAndUpdate(
+      id,
+      { suspendedAt: null, state: 'active' },
+      { new: true },
+    );
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async restore(id: string): Promise<ApiKey> {
+    const apiKey = await this.model.findByIdAndUpdate(
+      id,
+      { revokedAt: null, revocationReason: null, state: 'active' },
+      { new: true },
+    );
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async approve(id: string): Promise<ApiKey> {
+    const apiKey = await this.model.findByIdAndUpdate(
+      id,
+      { approvedAt: new Date(), state: 'active' },
+      { new: true },
+    );
+
+    if (!apiKey) {
+      throw new Error(`API key with ID ${id} not found`);
+    }
+
+    return this.mapToApiKey(apiKey);
+  }
+
+  async updateState(id: string, state: string): Promise<ApiKey> {
+    const apiKey = await this.model.findByIdAndUpdate(id, { state }, { new: true });
 
     if (!apiKey) {
       throw new Error(`API key with ID ${id} not found`);
@@ -171,6 +243,7 @@ export class MongooseAdapter implements IApiKeyAdapter {
     environment?: 'production' | 'staging' | 'development';
     scopes?: string[];
     active?: boolean;
+    state?: string;
     createdAfter?: Date;
     createdBefore?: Date;
     lastUsedAfter?: Date;
@@ -197,9 +270,14 @@ export class MongooseAdapter implements IApiKeyAdapter {
         queryFilter.scopes = { $all: filters.scopes };
       }
 
+      if (filters.state) {
+        queryFilter.state = filters.state;
+      }
+
       if (filters.active !== undefined) {
         if (filters.active) {
           queryFilter.revokedAt = null;
+          queryFilter.state = { $ne: 'revoked' };
           queryFilter.$or = [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }];
         } else {
           queryFilter.$or = [{ revokedAt: { $ne: null } }, { expiresAt: { $lte: new Date() } }];
@@ -285,6 +363,10 @@ export class MongooseAdapter implements IApiKeyAdapter {
       owner?: string | null;
       environment?: string | null;
       description?: string | null;
+      suspendedAt?: Date | null;
+      state?: string;
+      approvedAt?: Date | null;
+      expirationGracePeriodMs?: number | null;
     };
 
     return {
@@ -296,6 +378,10 @@ export class MongooseAdapter implements IApiKeyAdapter {
       expiresAt: doc.expiresAt,
       revokedAt: doc.revokedAt,
       revocationReason: docAny.revocationReason || undefined,
+      suspendedAt: docAny.suspendedAt || undefined,
+      state: (docAny.state as ApiKey['state']) || 'active',
+      approvedAt: docAny.approvedAt || undefined,
+      expirationGracePeriodMs: docAny.expirationGracePeriodMs || undefined,
       lastUsedAt: doc.lastUsedAt,
       ipWhitelist: docAny.ipWhitelist || [],
       ipBlacklist: docAny.ipBlacklist || [],

@@ -3,6 +3,7 @@ import { QuotaService, QuotaStatus } from '../../src/services/quota.service';
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { ApiKey } from '../../src/interfaces';
 import { API_KEY_ADAPTER, REDIS_CLIENT_KEY } from '../../src/api-key.module';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('QuotaService', () => {
   let service: QuotaService;
@@ -14,22 +15,16 @@ describe('QuotaService', () => {
     set: jest.Mock;
   };
 
-  const mockApiKey: ApiKey = {
+  const mockApiKey: ApiKey = createMockApiKey({
     id: 'test-key-123',
     name: 'Test Key',
     keyPrefix: 'abc12345',
-    hashedKey: 'hashed',
     scopes: ['read:projects'],
-    expiresAt: null,
-    revokedAt: null,
-    lastUsedAt: null,
     quotaMax: 100,
     quotaPeriod: 'daily',
     quotaUsed: 50,
     quotaResetAt: new Date(Date.now() + 86400000),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  });
 
   beforeEach(async () => {
     mockAdapter = {
@@ -39,6 +34,11 @@ describe('QuotaService', () => {
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       updateLastUsed: jest.fn(),
       updateQuotaUsage: jest.fn(),
       query: jest.fn(),

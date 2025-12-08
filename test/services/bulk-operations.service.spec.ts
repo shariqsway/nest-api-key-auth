@@ -2,6 +2,7 @@ import { BulkOperationsService } from '../../src/services/bulk-operations.servic
 import { IApiKeyAdapter } from '../../src/adapters/base.adapter';
 import { ApiKeyService } from '../../src/services/api-key.service';
 import { CreateApiKeyDto } from '../../src/interfaces';
+import { createMockApiKey } from '../helpers/api-key.helper';
 
 describe('BulkOperationsService', () => {
   let service: BulkOperationsService;
@@ -16,7 +17,14 @@ describe('BulkOperationsService', () => {
       findAll: jest.fn(),
       findAllActive: jest.fn(),
       revoke: jest.fn(),
+      suspend: jest.fn(),
+      unsuspend: jest.fn(),
+      restore: jest.fn(),
+      approve: jest.fn(),
+      updateState: jest.fn(),
       updateLastUsed: jest.fn(),
+      updateQuotaUsage: jest.fn(),
+      query: jest.fn(),
     } as unknown as jest.Mocked<IApiKeyAdapter>;
 
     mockApiKeyService = {
@@ -101,30 +109,24 @@ describe('BulkOperationsService', () => {
       const keyIds = ['key-1', 'key-2'];
 
       mockApiKeyService.revoke
-        .mockResolvedValueOnce({
-          id: 'key-1',
-          name: 'Key 1',
-          keyPrefix: 'abc',
-          hashedKey: 'hashed',
-          scopes: [],
-          expiresAt: null,
-          revokedAt: new Date(),
-          lastUsedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .mockResolvedValueOnce({
-          id: 'key-2',
-          name: 'Key 2',
-          keyPrefix: 'def',
-          hashedKey: 'hashed',
-          scopes: [],
-          expiresAt: null,
-          revokedAt: new Date(),
-          lastUsedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
+        .mockResolvedValueOnce(
+          createMockApiKey({
+            id: 'key-1',
+            name: 'Key 1',
+            keyPrefix: 'abc',
+            state: 'revoked',
+            revokedAt: new Date(),
+          }),
+        )
+        .mockResolvedValueOnce(
+          createMockApiKey({
+            id: 'key-2',
+            name: 'Key 2',
+            keyPrefix: 'def',
+            state: 'revoked',
+            revokedAt: new Date(),
+          }),
+        );
 
       const result = await service.bulkRevoke(keyIds);
 
@@ -139,18 +141,15 @@ describe('BulkOperationsService', () => {
       const keyIds = ['key-1', 'key-2'];
 
       mockApiKeyService.revoke
-        .mockResolvedValueOnce({
-          id: 'key-1',
-          name: 'Key 1',
-          keyPrefix: 'abc',
-          hashedKey: 'hashed',
-          scopes: [],
-          expiresAt: null,
-          revokedAt: new Date(),
-          lastUsedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+        .mockResolvedValueOnce(
+          createMockApiKey({
+            id: 'key-1',
+            name: 'Key 1',
+            keyPrefix: 'abc',
+            state: 'revoked',
+            revokedAt: new Date(),
+          }),
+        )
         .mockRejectedValueOnce(new Error('Key not found'));
 
       const result = await service.bulkRevoke(keyIds);

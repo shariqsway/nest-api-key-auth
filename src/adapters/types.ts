@@ -14,6 +14,10 @@ export interface TypeOrmApiKeyEntity {
   expiresAt: Date | null;
   revokedAt: Date | null;
   revocationReason?: string | null;
+  suspendedAt?: Date | null;
+  state: string;
+  approvedAt?: Date | null;
+  expirationGracePeriodMs?: number | null;
   lastUsedAt: Date | null;
   ipWhitelist?: string[];
   ipBlacklist?: string[];
@@ -36,6 +40,10 @@ export interface MongooseApiKeyDocument extends Document {
   expiresAt: Date | null;
   revokedAt: Date | null;
   revocationReason?: string | null;
+  suspendedAt?: Date | null;
+  state: string;
+  approvedAt?: Date | null;
+  expirationGracePeriodMs?: number | null;
   lastUsedAt: Date | null;
   ipWhitelist?: string[];
   ipBlacklist?: string[];
@@ -63,6 +71,7 @@ export interface MongooseApiKeyFilter {
   owner?: string;
   environment?: 'production' | 'staging' | 'development';
   scopes?: { $all: string[] };
+  state?: string | { $ne: string };
   revokedAt?: null | { $ne: null };
   expiresAt?: null | { $gt: Date } | { $lte: Date };
   createdAt?: { $gte?: Date } | { $lte?: Date } | { $gte?: Date; $lte?: Date };
@@ -97,6 +106,9 @@ export interface TypeOrmApiKeyEntityData {
   owner: string | null;
   environment: 'production' | 'staging' | 'development' | null;
   description: string | null;
+  state: string;
+  approvedAt: Date | null;
+  expirationGracePeriodMs: number | null;
 }
 
 /**
